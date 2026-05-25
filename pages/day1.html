@@ -1,0 +1,539 @@
+<!-- ============================================================
+     Day 1: Why Automate WLAN Testing? + Environment Setup
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- ── Hero ─────────────────────────────────────────────── -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 01</span>
+      <span class="phase-badge" style="background:rgba(88,166,255,0.15); color:#58a6ff; border:1px solid rgba(88,166,255,0.3);">
+        Phase 1 · Fundamentals
+      </span>
+    </div>
+    <h1>Why Automate WLAN Testing?<br>+ Setting Up Your Python Arsenal</h1>
+    <p>
+      Stop clicking "Connect" 200 times a week. In this first lesson we make the case for
+      WLAN automation, set up a professional Python environment, and write your very first
+      script that interrogates every network interface on your machine.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~45 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9 +</span></div>
+      <div class="hero-stat"><span>💻</span><span>Windows · macOS · Linux</span></div>
+      <div class="hero-stat"><span>📶</span><span>No special Wi-Fi hardware needed</span></div>
+    </div>
+  </div>
+
+  <!-- ── The Why ───────────────────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>The Manual Tester's Reality</h3>
+      <p>
+        Picture your typical Monday morning. You have a regression test plan with 40 line items:
+        connect to 8 different SSIDs, verify each one gets a valid IP address, check that signal
+        strength is above a threshold, note the association time, open a browser to confirm
+        the internet loads, and then write it all down in an Excel spreadsheet.
+      </p>
+      <p>
+        By Wednesday you've clicked the same <strong>"Connect"</strong> button 200 times.
+        Your fingers hurt. You made a typo in row 34. Your manager wants this repeated
+        on three different laptops. You want to quit.
+      </p>
+
+      <div class="callout">
+        <strong>This is not a skills problem. It is a tooling problem.</strong><br>
+        Repetitive, deterministic work is exactly what computers were designed to do
+        — not the humans sitting in front of them.
+      </div>
+
+      <h3>The Automation Promise</h3>
+      <p>
+        Now imagine a different Monday. You open your terminal, type one command, and go make coffee.
+        When you return, a clean HTML report is sitting in a folder with: pass/fail status for
+        all 40 test cases, the exact timestamp each connection succeeded or failed, the IP
+        addresses that were assigned, and a log file you can attach directly to your bug report.
+      </p>
+      <p>
+        That is the promise of WLAN automation. And <strong>Python</strong> is the key.
+      </p>
+
+      <h3>Why Python?</h3>
+      <p>
+        Think of Python as the English of programming languages — it reads almost like plain sentences:
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># This almost reads like plain English:
+if signal_strength &lt; -75:
+    print("Signal too weak — test FAILED")</code></pre>
+      </div>
+      <p>
+        Python has a massive ecosystem of ready-made libraries for networking, testing, and reporting.
+        It runs on Windows, macOS, and Linux. And most critically — the entire WLAN and networking
+        industry already uses it. Tools like Scapy, pytest, and iPerf3 all speak Python.
+      </p>
+    </div>
+  </div>
+
+  <!-- ── Requirements ──────────────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🛠</span>
+      <h2>Hardware &amp; Software Requirements</h2>
+    </div>
+    <div class="section-card-body">
+      <table class="req-table">
+        <thead>
+          <tr>
+            <th>Requirement</th>
+            <th>Details</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Operating System</strong></td>
+            <td>Windows 10/11, Ubuntu 20.04+, or macOS 12+</td>
+            <td><span class="req-tag ok">Any</span></td>
+          </tr>
+          <tr>
+            <td><strong>Python</strong></td>
+            <td>Version 3.9 or higher</td>
+            <td><span class="req-tag">Install today</span></td>
+          </tr>
+          <tr>
+            <td><strong>Code Editor</strong></td>
+            <td>VS Code (recommended, free)</td>
+            <td><span class="req-tag">Install today</span></td>
+          </tr>
+          <tr>
+            <td><strong>Terminal</strong></td>
+            <td>PowerShell (Windows) · Terminal (macOS/Linux)</td>
+            <td><span class="req-tag ok">Built-in</span></td>
+          </tr>
+          <tr>
+            <td><strong>Wi-Fi Adapter</strong></td>
+            <td>Your built-in laptop Wi-Fi is fine for Day 1</td>
+            <td><span class="req-tag ok">Already have it</span></td>
+          </tr>
+          <tr>
+            <td><strong>Internet</strong></td>
+            <td>Required for downloading packages</td>
+            <td><span class="req-tag ok">Required</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p style="margin-top:14px; font-size:13.5px; color:#57606a;">
+        💡 No special hardware is needed today. We are setting up the workbench before we start building.
+      </p>
+    </div>
+  </div>
+
+  <!-- ── Step-by-Step Setup ────────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🔧</span>
+      <h2>Step-by-Step Environment Setup</h2>
+    </div>
+    <div class="section-card-body">
+
+      <div class="step-label">Step 1 — Install Python</div>
+      <p><strong>On Windows:</strong></p>
+      <ol>
+        <li>Go to <strong>python.org/downloads</strong> and download Python 3.11+</li>
+        <li>Run the installer</li>
+        <li><strong style="color:#d29922;">Critical:</strong> Check the box that says <em>"Add Python to PATH"</em> before clicking Install</li>
+        <li>Open PowerShell and verify:</li>
+      </ol>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">PowerShell</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-bash">python --version</code></pre>
+      </div>
+
+      <p><strong>On Ubuntu / Debian Linux:</strong></p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Bash</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-bash">sudo apt update
+sudo apt install python3 python3-pip python3-venv -y
+python3 --version</code></pre>
+      </div>
+
+      <p><strong>On macOS:</strong></p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Bash</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-bash"># Install Homebrew first if you don't have it
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+brew install python
+python3 --version</code></pre>
+      </div>
+
+      <div class="step-label">Step 2 — Install VS Code</div>
+      <ol>
+        <li>Download from <strong>code.visualstudio.com</strong></li>
+        <li>Open VS Code and press <code>Ctrl+Shift+X</code> (<code>Cmd+Shift+X</code> on Mac)</li>
+        <li>Search for and install the <strong>"Python" extension by Microsoft</strong></li>
+      </ol>
+
+      <div class="step-label">Step 3 — Create Your Project Structure</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Bash</span>
+          <span class="code-block-filename">Terminal</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-bash"># Create a dedicated folder for this entire 40-day course
+mkdir wlan-automation-course
+cd wlan-automation-course
+
+# Create a virtual environment — your isolated Python sandbox
+# (Think of it as a clean workbench just for this project)
+python3 -m venv venv
+
+# Activate the virtual environment
+# macOS / Linux:
+source venv/bin/activate
+
+# Windows (PowerShell):
+.\venv\Scripts\Activate.ps1</code></pre>
+      </div>
+      <p>
+        After activation, your terminal prompt changes to show <code>(venv)</code> at the start.
+        This tells you you're inside your isolated environment — packages you install here
+        won't clash with anything else on your system.
+      </p>
+
+      <div class="step-label">Step 4 — Install Day 1 Libraries</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Bash</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-bash"># Upgrade pip to the latest version
+pip install --upgrade pip
+
+# Install our first two essential libraries
+pip install netifaces psutil
+
+# Verify the install
+pip list</code></pre>
+      </div>
+
+      <div class="callout">
+        <strong>What are these libraries?</strong><br>
+        <strong>netifaces</strong> — Lets Python ask the OS "what network interfaces do I have?" and read their IP/MAC addresses.<br>
+        <strong>psutil</strong> — Short for "process and system utilities." Lets Python read CPU, memory, and — crucially for us — live network I/O statistics per interface.
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Code Walkthrough ──────────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — Your First WLAN Script</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create a new file called <code>Day01_hello_wlan.py</code> inside your
+        <code>wlan-automation-course/</code> folder and paste the code below.
+        Read every comment — they explain <em>exactly</em> what each line does.
+      </p>
+
+      <div class="step-label">Block 1 — Imports &amp; Setup</div>
+      <p>
+        Every Python script starts by importing the libraries it needs.
+        Think of this like gathering your tools before you start work.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day01_hello_wlan.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 1: Hello, WLAN Automation!
+# Purpose: Discover all network interfaces on this machine
+#          and identify which ones are wireless.
+# =============================================================
+
+import netifaces  # Third-party: read network interface names &amp; addresses
+import psutil     # Third-party: read system and network I/O stats
+import platform   # Built-in:    tells us which OS we're running on</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — System Info Function</div>
+      <p>
+        A <strong>function</strong> is a reusable named block of code. We define it once
+        with <code>def</code> and can call it as many times as we like. This function
+        prints a banner showing which OS and Python version we're running.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def get_system_info():
+    """Print basic system info relevant to WLAN testing."""
+    print("=" * 55)
+    print("  WLAN AUTOMATION COURSE — Day 1 System Check")
+    print("=" * 55)
+
+    # platform.system() returns 'Windows', 'Linux', or 'Darwin' (macOS)
+    os_name = platform.system()
+    print(f"  Operating System : {os_name} {platform.release()}")
+    print(f"  Python Version   : {platform.python_version()}")
+    print("=" * 55)</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — Network Interface Discovery</div>
+      <p>
+        This is the core of Day 1. We ask the OS to list every network interface,
+        then read each one's IP address and MAC address.
+        <code>netifaces.interfaces()</code> is like running <code>ipconfig</code> or
+        <code>ifconfig</code> but from inside Python — and the result is a clean
+        Python list we can loop over.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def list_network_interfaces():
+    """
+    Discover and display all network interfaces.
+
+    netifaces.interfaces() returns a list like:
+      Linux   → ['lo', 'eth0', 'wlan0']
+      Windows → ['Loopback', 'Wi-Fi', 'Ethernet']
+    """
+    print("\n[+] Discovering Network Interfaces...")
+    print("-" * 55)
+
+    # Get every interface name the OS knows about
+    interfaces = netifaces.interfaces()
+
+    for iface_name in interfaces:
+
+        # netifaces.ifaddresses() returns a dict of address families:
+        #   AF_INET  (value 2)     = IPv4 addresses
+        #   AF_LINK  (value 17)    = MAC / hardware addresses
+        addresses = netifaces.ifaddresses(iface_name)
+
+        # .get(key, default) is safe — won't crash if key is missing
+        ipv4_info = addresses.get(netifaces.AF_INET, [{}])
+        ipv4_addr = ipv4_info[0].get('addr', 'No IPv4 assigned')
+
+        mac_info  = addresses.get(netifaces.AF_LINK, [{}])
+        mac_addr  = mac_info[0].get('addr',  'No MAC address')
+
+        # Label wireless interfaces for easy reading
+        is_wireless = any(tag in iface_name.lower()
+                          for tag in ['wlan', 'wi-fi', 'wifi', 'wl', 'airport'])
+        label = "[WIRELESS]" if is_wireless else "[WIRED/OTHER]"
+
+        print(f"  {label} {iface_name}")
+        print(f"    IPv4 : {ipv4_addr}")
+        print(f"    MAC  : {mac_addr}")
+        print("-" * 55)</code></pre>
+      </div>
+
+      <div class="step-label">Block 4 — Network I/O Stats</div>
+      <p>
+        <code>psutil.net_io_counters(pernic=True)</code> returns live byte counters
+        for every interface — the same numbers you'd see in Task Manager or
+        <code>nload</code>. Later in this course we'll use these counters to measure
+        throughput during automated tests.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def check_network_stats():
+    """Show live network I/O counters — a preview of throughput testing."""
+    print("\n[+] Network I/O Statistics (Current Snapshot):")
+    print("-" * 55)
+
+    # pernic=True → stats broken down per network interface card
+    net_stats = psutil.net_io_counters(pernic=True)
+
+    for iface_name, stats in net_stats.items():
+        # Convert raw bytes → megabytes for human readability
+        sent_mb = stats.bytes_sent / (1024 * 1024)
+        recv_mb = stats.bytes_recv / (1024 * 1024)
+
+        # :<20 pads the name to 20 chars (left-align); :>8.2f right-aligns 2 decimals
+        print(f"  {iface_name:&lt;20} | Sent: {sent_mb:&gt;8.2f} MB | Recv: {recv_mb:&gt;8.2f} MB")
+
+    print("-" * 55)</code></pre>
+      </div>
+
+      <div class="step-label">Block 5 — Entry Point (Run the Script)</div>
+      <p>
+        The <code>if __name__ == "__main__":</code> block is a Python convention.
+        It means: "only run this code when the script is executed directly,
+        not when it's imported as a module by another script." Always use this pattern.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">if __name__ == "__main__":
+    get_system_info()
+    list_network_interfaces()
+    check_network_stats()
+
+    print("\n[✓] Day 1 Complete! Your Python environment is ready.")
+    print("[→] Tomorrow: Variables, data types &amp; your first Wi-Fi logic.\n")</code></pre>
+      </div>
+
+      <div class="step-label">Run It</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Bash</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-bash"># Make sure your venv is active first (you'll see (venv) in the prompt)
+python Day01_hello_wlan.py</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Expected Output ────────────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>This is what a successful run looks like. Your interface names and addresses
+      will differ, but the structure should match exactly.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ python Day01_hello_wlan.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-dim">=======================================================</span>
+<span class="t-bold">  WLAN AUTOMATION COURSE — Day 1 System Check</span>
+<span class="t-dim">=======================================================</span>
+  Operating System : Linux 5.15.0
+  Python Version   : 3.11.4
+<span class="t-dim">=======================================================</span>
+
+<span class="t-green">[+] Discovering Network Interfaces...</span>
+<span class="t-dim">-------------------------------------------------------</span>
+  [WIRED/OTHER] lo
+    IPv4 : 127.0.0.1
+    MAC  : 00:00:00:00:00:00
+<span class="t-dim">-------------------------------------------------------</span>
+  [WIRED/OTHER] eth0
+    IPv4 : 192.168.1.105
+    MAC  : a4:c3:f0:12:34:56
+<span class="t-dim">-------------------------------------------------------</span>
+  <span class="t-blue">[WIRELESS] wlan0</span>
+    IPv4 : 192.168.1.110
+    MAC  : 3c:7c:3f:ab:cd:ef
+<span class="t-dim">-------------------------------------------------------</span>
+
+<span class="t-green">[+] Network I/O Statistics (Current Snapshot):</span>
+<span class="t-dim">-------------------------------------------------------</span>
+  lo                   | Sent:     0.05 MB | Recv:     0.05 MB
+  eth0                 | Sent:    12.34 MB | Recv:   245.78 MB
+  <span class="t-blue">wlan0</span>                | Sent:     3.21 MB | Recv:    89.12 MB
+<span class="t-dim">-------------------------------------------------------</span>
+
+<span class="t-green">[✓] Day 1 Complete! Your Python environment is ready.</span>
+<span class="t-yellow">[→] Tomorrow: Variables, data types &amp; your first Wi-Fi logic.</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Exercise ────────────────────────────────────────────── -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        The <code>list_network_interfaces()</code> function already labels interfaces as
+        <code>[WIRELESS]</code> or <code>[WIRED/OTHER]</code>. Your challenge is to extend it:
+      </p>
+      <ul>
+        <li>
+          <strong>Task 1:</strong> If an interface is labelled <code>[WIRELESS]</code>
+          <em>and</em> has a valid IPv4 address (not <code>'No IPv4 assigned'</code>),
+          print an additional line: <code>"  ↳ Active wireless connection detected!"</code>
+          in a visually distinct way.
+        </li>
+        <li>
+          <strong>Task 2:</strong> Count how many wireless and how many wired interfaces
+          are found and print a summary line at the end:
+          <code>"Summary: X wireless, Y wired/other interfaces found."</code>
+        </li>
+        <li>
+          <strong>Bonus:</strong> Use <code>psutil.net_io_counters(pernic=True)</code>
+          to show bytes received for <em>only</em> the wireless interfaces in the summary.
+        </li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> Use a counter variable (e.g., <code>wireless_count = 0</code>)
+        before the loop, increment it inside with <code>wireless_count += 1</code>, and
+        print it after the loop ends. The <code>in</code> operator checks if a substring
+        is present: <code>if "No IPv4" not in ipv4_addr</code>.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── What's Next ────────────────────────────────────────── -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#58a6ff; margin-bottom:4px;">
+            Up Next · Day 2
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Variables, Data Types &amp; Your First Real Wi-Fi Script
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            An SSID is a string. An RSSI value is an integer. A scan result is a dictionary.
+            Tomorrow you'll learn exactly why choosing the right data type is the foundation
+            of every automated WLAN test — and build a mini AP evaluation engine from scratch.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

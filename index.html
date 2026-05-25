@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Zero to Hero: WLAN Automation — A free 40-day course taking manual Wi-Fi testers to enterprise-grade Python automation.">
+  <title>Zero to Hero: WLAN Automation</title>
+
+  <!-- Prism syntax highlighting (Python + Bash) -->
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css"
+        crossorigin="anonymous">
+
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- ── LEFT SIDEBAR ────────────────────────────────────── -->
+    <aside class="sidebar" id="sidebar">
+
+      <div class="sidebar-header">
+        <div class="logo">
+          <span class="logo-icon">📡</span>
+          <div>
+            <div class="logo-title">Zero to Hero</div>
+            <div class="logo-subtitle">WLAN Automation</div>
+          </div>
+        </div>
+        <div class="progress-container">
+          <div class="progress-label">
+            <span>Course Progress</span>
+            <span id="progress-text">1 / 40 days</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill" style="width: 2.5%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase + day items injected here by app.js -->
+      <nav class="sidebar-nav" id="sidebar-nav" aria-label="Course navigation"></nav>
+
+    </aside>
+
+    <!-- Mobile sidebar backdrop -->
+    <div class="sidebar-overlay" id="sidebar-overlay" aria-hidden="true"></div>
+
+    <!-- ── MAIN AREA ────────────────────────────────────────── -->
+    <div class="main-wrapper">
+
+      <!-- Top bar -->
+      <header class="top-bar">
+        <button class="hamburger" id="hamburger" aria-label="Toggle navigation">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <div class="top-bar-title" id="top-bar-title">
+          Day 1 — Why Automate WLAN Testing?
+        </div>
+      </header>
+
+      <!-- Day content loads here -->
+      <main class="content-area" id="content-area" role="main">
+        <div class="loading-spinner" id="loading-spinner">
+          <div class="spinner"></div>
+          <p>Loading content…</p>
+        </div>
+      </main>
+
+    </div><!-- end .main-wrapper -->
+  </div><!-- end .app-shell -->
+
+  <!-- Prism.js core + language packs -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"
+          crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"
+          crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"
+          crossorigin="anonymous"></script>
+
+  <!-- Course data & app logic -->
+  <script src="js/curriculum.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

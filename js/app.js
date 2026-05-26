@@ -76,6 +76,30 @@ function setActiveDay(dayNum) {
   }
 }
 
+// ---- GA4 tracking ------------------------------------------
+function trackDayView(dayNum, meta) {
+  if (typeof gtag !== 'function') return; // silently skip on localhost
+
+  const pageTitle = `Day ${dayNum} — ${meta.title}`;
+  const pagePath  = `/?day=${dayNum}`;
+
+  // 1. Virtual page view — appears in GA4 Pages & screens report
+  gtag('event', 'page_view', {
+    page_title:    pageTitle,
+    page_path:     pagePath,
+    page_location: window.location.origin + pagePath
+  });
+
+  // 2. Custom event — filter by day/phase in GA4 Explore
+  gtag('event', 'day_viewed', {
+    day_number : dayNum,
+    day_title  : meta.title,
+    phase      : meta.phaseData.phase,
+    phase_title: meta.phaseData.title,
+    status     : meta.status   // 'available' or 'coming-soon'
+  });
+}
+
 // ---- Find day meta from curriculum -------------------------
 function findDay(dayNum) {
   for (const phase of CURRICULUM) {
@@ -101,6 +125,7 @@ async function loadDay(dayNum) {
   if (meta.status === 'coming-soon') {
     showComingSoon(meta, content);
     if (topTitle) topTitle.textContent = `Day ${dayNum} — Coming Soon`;
+    trackDayView(dayNum, meta);
     closeMobileSidebar();
     return;
   }
@@ -126,6 +151,9 @@ async function loadDay(dayNum) {
 
     // Update top bar title
     if (topTitle) topTitle.textContent = `Day ${dayNum} — ${meta.title}`;
+
+    // Track in GA4
+    trackDayView(dayNum, meta);
 
     // Scroll to top
     content.scrollTop = 0;

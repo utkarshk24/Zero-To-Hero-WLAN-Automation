@@ -1,0 +1,501 @@
+<!-- ============================================================
+     Day 2: Python Variables & Data Types — Wi-Fi Script Foundations
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- ── Hero ─────────────────────────────────────────────── -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 02</span>
+      <span class="phase-badge" style="background:rgba(88,166,255,0.15); color:#58a6ff; border:1px solid rgba(88,166,255,0.3);">
+        Phase 1 · Fundamentals
+      </span>
+    </div>
+    <h1>Python Variables &amp; Data Types —<br>The Building Blocks of Wi-Fi Scripts</h1>
+    <p>
+      An SSID is a string. An RSSI value is an integer. A scan result is a dictionary.
+      Today you learn exactly why choosing the right data type is the foundation of every
+      automated WLAN test — and build a mini AP evaluation engine from scratch.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~50 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>No new libraries</span></div>
+      <div class="hero-stat"><span>💻</span><span>Windows · macOS · Linux</span></div>
+    </div>
+  </div>
+
+  <!-- ── The Why ───────────────────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>The Manual Tester's Mental Model</h3>
+      <p>
+        When you test Wi-Fi manually, your brain is constantly storing and comparing information:
+      </p>
+      <div class="callout">
+        <em>"The SSID I need to connect to is <strong>CorpNet_5G</strong>. The password is
+        <strong>Sup3rS3cure!</strong>. The expected IP range is <strong>192.168.10.x</strong>.
+        Signal strength must be better than <strong>-70 dBm</strong>."</em>
+      </div>
+      <p>
+        You're holding <strong>values</strong> (the actual data) and <strong>labels</strong>
+        (what those values mean) in your head simultaneously. When something doesn't match,
+        you flag it as a failure.
+      </p>
+      <p>
+        Python does the exact same thing — except it stores these values in
+        <strong>variables</strong>, never forgets them, never makes a typo, and can
+        check thousands of them per second.
+      </p>
+
+      <h3>The Analogy: Variables Are Labelled Boxes</h3>
+      <p>
+        Imagine a set of cardboard boxes on a shelf. Each box has a label on it.
+        You can put something in, take it out, or swap the contents any time you like.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># Creating labelled boxes and putting values inside them:
+ssid      = "CorpNet_5G"   # Box labelled "ssid"    holds text
+rssi      = -68            # Box labelled "rssi"    holds a number
+connected = True           # Box labelled "connected" holds True/False</code></pre>
+      </div>
+
+      <h3>Why Data Types Matter in WLAN Testing</h3>
+      <p>
+        Not all Wi-Fi data is the same kind of thing — and Python needs to know the
+        difference so it can work with the data correctly:
+      </p>
+      <ul>
+        <li>An <strong>SSID</strong> is text → <code>str</code> (string)</li>
+        <li>An <strong>RSSI</strong> value is a whole number → <code>int</code> (integer, always negative)</li>
+        <li>A <strong>channel frequency</strong> has decimals → <code>float</code> (e.g. 5.18 GHz)</li>
+        <li>A <strong>"is dual-band?"</strong> flag is yes/no → <code>bool</code> (True or False)</li>
+        <li>A <strong>list of channels</strong> is multiple values → <code>list</code></li>
+        <li>A <strong>full AP profile</strong> is labelled key-value pairs → <code>dict</code> (dictionary)</li>
+      </ul>
+      <p>
+        Choosing the right type isn't academic — it determines what operations you can
+        perform. You can't do maths on an SSID. You can't check if a number "contains"
+        a substring. Types enforce correct thinking.
+      </p>
+    </div>
+  </div>
+
+  <!-- ── Requirements ──────────────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🛠</span>
+      <h2>Hardware &amp; Software Requirements</h2>
+    </div>
+    <div class="section-card-body">
+      <table class="req-table">
+        <thead>
+          <tr><th>Requirement</th><th>Details</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Day 1 Setup</strong></td>
+            <td>Python 3.9+, VS Code, virtual environment activated</td>
+            <td><span class="req-tag ok">Already done</span></td>
+          </tr>
+          <tr>
+            <td><strong>New Libraries</strong></td>
+            <td>None — everything today is built into Python</td>
+            <td><span class="req-tag ok">No install needed</span></td>
+          </tr>
+          <tr>
+            <td><strong>Hardware</strong></td>
+            <td>No special Wi-Fi hardware needed</td>
+            <td><span class="req-tag ok">Any machine</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Code Walkthrough ──────────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create a new file <code>Day02_variables_and_data_types.py</code> inside your
+        <code>wlan-automation-course/</code> folder. Work through each block in order.
+      </p>
+
+      <!-- Block 1 -->
+      <div class="step-label">Block 1 — Strings: For All Text Data</div>
+      <p>
+        Strings store any text value — SSIDs, passwords, security types, MAC addresses,
+        error messages. They are always wrapped in quotes.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day02_variables_and_data_types.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 2: Variables & Data Types for WLAN Automation
+# =============================================================
+
+# --------------------------------------------------
+# BLOCK 1: STRINGS — text data
+# --------------------------------------------------
+ssid          = "CorpNet_5G"
+password      = "Sup3rS3cure!"
+security_type = "WPA3-SAE"
+bssid         = "AA:BB:CC:DD:EE:FF"   # The AP's MAC address
+
+# type() tells you what kind of data is stored in a variable
+print(f"SSID: '{ssid}' | Type: {type(ssid)}")
+# Output: SSID: 'CorpNet_5G' | Type: &lt;class 'str'&gt;
+
+# Strings have built-in methods — extremely useful for parsing scan output:
+print(ssid.upper())            # CORPNET_5G  → case-insensitive comparisons
+print(ssid.replace("_", "-"))  # CorpNet-5G  → clean up parsed text
+print(len(ssid))               # 10           → 802.11 max SSID length is 32 chars</code></pre>
+      </div>
+
+      <!-- Block 2 -->
+      <div class="step-label">Block 2 — Integers &amp; Floats: For Numeric Data</div>
+      <p>
+        RSSI values and channel numbers are integers (whole numbers). Frequencies
+        are floats (they have a decimal point). The critical difference matters when
+        you do maths — and every threshold check is maths.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># --------------------------------------------------
+# BLOCK 2: INTEGERS & FLOATS — numeric data
+# --------------------------------------------------
+rssi_dbm        = -68     # Signal strength in dBm (always negative, always int)
+channel         = 36      # Wi-Fi channel number
+frequency_ghz   = 5.18    # Channel centre frequency — float because of the decimal
+throughput_mbps = 945     # Measured throughput in Mbps
+
+print(f"Signal : {rssi_dbm} dBm  | Type: {type(rssi_dbm)}")
+print(f"Channel: {channel}       | Type: {type(channel)}")
+print(f"Freq   : {frequency_ghz} GHz | Type: {type(frequency_ghz)}")
+
+# Maths with numeric types → the foundation of threshold checks:
+rssi_threshold = -75
+
+if rssi_dbm &gt; rssi_threshold:
+    print(f"[PASS] Signal {rssi_dbm} dBm is above threshold {rssi_threshold} dBm")
+else:
+    print(f"[FAIL] Signal {rssi_dbm} dBm is BELOW threshold {rssi_threshold} dBm")</code></pre>
+      </div>
+
+      <!-- Block 3 -->
+      <div class="step-label">Block 3 — Booleans: For True/False State Flags</div>
+      <p>
+        Every test ultimately reduces to <code>True</code> or <code>False</code>.
+        Booleans are the backbone of all conditional test logic.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># --------------------------------------------------
+# BLOCK 3: BOOLEANS — True/False state flags
+# --------------------------------------------------
+is_connected     = True
+is_hidden_ssid   = False
+supports_wifi6   = True    # 802.11ax capable?
+has_valid_ip     = False   # Did DHCP assign an IP?
+
+print(f"Connected  : {is_connected}")
+print(f"Wi-Fi 6 AP : {supports_wifi6}")
+
+# Combining booleans with 'and' / 'or' / 'not':
+if is_connected and has_valid_ip:
+    print("[PASS] Connected and has valid IP")
+elif is_connected and not has_valid_ip:
+    print("[FAIL] Connected but no IP — likely a DHCP issue")
+else:
+    print("[FAIL] Not connected at all")</code></pre>
+      </div>
+
+      <!-- Block 4 -->
+      <div class="step-label">Block 4 — Lists: For Ordered Collections</div>
+      <p>
+        When you have multiple values of the same kind — a test plan with 10 SSIDs,
+        a set of allowed channels, a history of RSSI readings — use a list.
+        Lists keep things in order and let you loop over them.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># --------------------------------------------------
+# BLOCK 4: LISTS — ordered collections
+# --------------------------------------------------
+test_ssid_list      = ["CorpNet_2G", "CorpNet_5G", "CorpNet_6G", "Guest_WiFi"]
+dfs_free_channels   = [36, 40, 44, 48, 149, 153, 157, 161, 165]
+
+# Access by index — Python lists start at 0, not 1
+print(f"First SSID : {test_ssid_list[0]}")    # CorpNet_2G
+print(f"Last SSID  : {test_ssid_list[-1]}")   # Guest_WiFi (negative = count from end)
+print(f"Total      : {len(test_ssid_list)}")  # 4
+
+# Add a new SSID to the plan dynamically
+test_ssid_list.append("IoT_Sensors")
+print(f"Updated    : {test_ssid_list}")
+
+# Check membership — this is how you validate a scanned SSID is in your test plan
+target = "CorpNet_5G"
+if target in test_ssid_list:
+    print(f"'{target}' is in the test plan — proceed with test")</code></pre>
+      </div>
+
+      <!-- Block 5 -->
+      <div class="step-label">Block 5 — Dictionaries: For Structured AP Profiles</div>
+      <p>
+        A dictionary stores data as <strong>key: value</strong> pairs — like a form
+        with labelled fields filled in. This is how you represent a full AP profile,
+        a single scan result, or a test configuration. It is the most important data
+        structure you will use throughout this course.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># --------------------------------------------------
+# BLOCK 5: DICTIONARIES — structured key:value records
+# --------------------------------------------------
+
+# A complete profile for one AP under test
+ap_profile = {
+    "ssid"          : "CorpNet_5G",
+    "bssid"         : "AA:BB:CC:DD:EE:FF",
+    "security"      : "WPA3-SAE",
+    "password"      : "Sup3rS3cure!",
+    "band"          : "5GHz",
+    "channel"       : 36,
+    "expected_rssi" : -70,         # Minimum acceptable signal in dBm
+    "expected_std"  : "802.11ax"   # Expected Wi-Fi generation (Wi-Fi 6)
+}
+
+# Access values by their key name
+print(f"Testing    : {ap_profile['ssid']}")
+print(f"Min signal : {ap_profile['expected_rssi']} dBm")
+print(f"Security   : {ap_profile['security']}")
+
+# A list of dictionaries = a table of scan results (this is what real scan data looks like)
+scan_results = [
+    {"ssid": "CorpNet_5G",  "rssi": -62, "channel": 36, "security": "WPA3"},
+    {"ssid": "CorpNet_2G",  "rssi": -71, "channel": 6,  "security": "WPA2"},
+    {"ssid": "Neighbor_AP", "rssi": -88, "channel": 6,  "security": "WPA2"},
+]
+
+print("\n--- Scan Results ---")
+for ap in scan_results:
+    # :<15 left-aligns text in 15 characters; :>4 right-aligns number in 4 characters
+    print(f"  {ap['ssid']:&lt;15} | {ap['rssi']:&gt;4} dBm | Ch {ap['channel']:&gt;3} | {ap['security']}")</code></pre>
+      </div>
+
+      <!-- Block 6 -->
+      <div class="step-label">Block 6 — Putting It All Together: A Mini AP Evaluator</div>
+      <p>
+        This is the payoff. Using everything from Blocks 1–5, we build a function that
+        compares a live scan result against an expected AP profile and returns a structured
+        pass/fail verdict. <strong>This is the exact pattern at the core of every WLAN
+        automated test you will ever write.</strong>
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># --------------------------------------------------
+# BLOCK 6: THE PAYOFF — Mini AP Evaluation Engine
+# --------------------------------------------------
+
+def evaluate_ap(scan_result: dict, expected: dict) -> dict:
+    """
+    Compare a live scan result against an expected AP profile.
+    Returns a results dict with individual check verdicts + an overall verdict.
+    """
+    results = {}
+
+    # Check 1: Does the SSID match what we expect?
+    results["ssid_match"]  = (scan_result["ssid"] == expected["ssid"])
+
+    # Check 2: Is signal strength at or above the minimum threshold?
+    results["rssi_ok"]     = (scan_result["rssi"] &gt; expected["expected_rssi"])
+
+    # Check 3: Is the security protocol correct?
+    results["security_ok"] = (scan_result["security"] == expected["security"])
+
+    # Overall: every single check must pass for the AP to pass
+    # all() returns True only if every value in the list is True
+    results["overall"] = all([
+        results["ssid_match"],
+        results["rssi_ok"],
+        results["security_ok"]
+    ])
+
+    return results
+
+
+# --- Simulate what a real live scan would return ---
+live_scan = {
+    "ssid"    : "CorpNet_5G",
+    "rssi"    : -62,
+    "security": "WPA3"
+}
+
+# Run the evaluation
+outcome = evaluate_ap(live_scan, ap_profile)
+
+# Print a clean report
+print("\n" + "=" * 45)
+print("  AP EVALUATION REPORT")
+print("=" * 45)
+print(f"  SSID Match    : {'PASS ✓' if outcome['ssid_match'] else 'FAIL ✗'}")
+print(f"  Signal (RSSI) : {'PASS ✓' if outcome['rssi_ok']    else 'FAIL ✗'}")
+print(f"  Security Type : {'PASS ✓' if outcome['security_ok'] else 'FAIL ✗'}")
+print("-" * 45)
+print(f"  Overall Result: {'[ PASS ]' if outcome['overall'] else '[ FAIL ]'}")
+print("=" * 45)
+
+
+if __name__ == "__main__":
+    pass  # All blocks above run at the module level for learning clarity</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Expected Output ───────────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>Run the full script with <code>python Day02_variables_and_data_types.py</code>
+      and you should see:</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">python Day02_variables_and_data_types.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre>SSID: 'CorpNet_5G' | Type: &lt;class 'str'&gt;
+CORPNET_5G
+CorpNet-5G
+10
+<span class="t-dim">---</span>
+Signal : -68 dBm  | Type: &lt;class 'int'&gt;
+Channel: 36       | Type: &lt;class 'int'&gt;
+Freq   : 5.18 GHz | Type: &lt;class 'float'&gt;
+<span class="t-green">[PASS] Signal -68 dBm is above threshold -75 dBm</span>
+<span class="t-dim">---</span>
+Connected  : True
+Wi-Fi 6 AP : True
+<span class="t-yellow">[FAIL] Connected but no IP — likely a DHCP issue</span>
+<span class="t-dim">---</span>
+First SSID : CorpNet_2G
+Last SSID  : Guest_WiFi
+Total      : 4
+Updated    : ['CorpNet_2G', 'CorpNet_5G', 'CorpNet_6G', 'Guest_WiFi', 'IoT_Sensors']
+'CorpNet_5G' is in the test plan — proceed with test
+<span class="t-dim">---</span>
+Testing    : CorpNet_5G
+Min signal : -70 dBm
+Security   : WPA3-SAE
+<span class="t-dim">
+--- Scan Results ---</span>
+  CorpNet_5G      |  -62 dBm | Ch  36 | WPA3
+  CorpNet_2G      |  -71 dBm | Ch   6 | WPA2
+  Neighbor_AP     |  -88 dBm | Ch   6 | WPA2
+<span class="t-dim">
+=============================================</span>
+<span class="t-bold">  AP EVALUATION REPORT</span>
+<span class="t-dim">=============================================</span>
+  SSID Match    : <span class="t-green">PASS ✓</span>
+  Signal (RSSI) : <span class="t-green">PASS ✓</span>
+  Security Type : <span class="t-green">PASS ✓</span>
+<span class="t-dim">---------------------------------------------</span>
+  Overall Result: <span class="t-green t-bold">[ PASS ]</span>
+<span class="t-dim">=============================================</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Exercise ─────────────────────────────────────────── -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Create a dictionary called <code>my_ap_profile</code> that represents a real
+        Wi-Fi network near you (home or office — use a made-up password).
+        It must have at least these keys: <code>ssid</code>, <code>band</code>,
+        <code>channel</code>, <code>security</code>, <code>expected_rssi</code>.
+      </p>
+      <p>Then write an <code>if/elif/else</code> block that checks all three of these:</p>
+      <ul>
+        <li>Is <code>expected_rssi</code> greater than <code>-80</code>?
+            Print <code>"Signal threshold acceptable"</code> or <code>"Signal threshold too low"</code></li>
+        <li>Is <code>band</code> equal to <code>"5GHz"</code> or <code>"6GHz"</code>?
+            Print <code>"High-band AP"</code> or <code>"2.4GHz only AP"</code></li>
+        <li>Is <code>security</code> not equal to <code>"Open"</code>?
+            Print <code>"Secured network"</code> or <code>"WARNING: Open network detected!"</code></li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> For the band check, use the <code>in</code> operator with a list:
+        <code>if my_ap_profile["band"] in ["5GHz", "6GHz"]</code>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── What's Next ──────────────────────────────────────── -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#58a6ff; margin-bottom:4px;">
+            Up Next · Day 3
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Control Flow for Network Logic — if, elif, loops &amp; real scan parsing
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            You know your data types. Tomorrow you learn how to make decisions with them —
+            looping over scan results, filtering by band, flagging rogue APs, and building
+            your first reusable channel validator.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

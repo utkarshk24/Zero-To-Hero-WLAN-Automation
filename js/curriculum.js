@@ -12,7 +12,7 @@ const CURRICULUM = [
     cssVar: "var(--phase1)",
     days: [
       { day: 1,  title: "Why Automate? + Environment Setup",   file: "pages/day1.html",  status: "available" },
-      { day: 2,  title: "Variables, Data Types & First Script", file: "pages/day2.html",  status: "coming-soon" },
+      { day: 2,  title: "Variables, Data Types & First Script", file: "pages/day2.html",  status: "available" },
       { day: 3,  title: "Control Flow for Network Logic",       file: "pages/day3.html",  status: "coming-soon" },
       { day: 4,  title: "Functions: Reusable Building Blocks",  file: "pages/day4.html",  status: "coming-soon" },
       { day: 5,  title: "pip, Virtual Envs & Library Ecosystem",file: "pages/day5.html",  status: "coming-soon" },

@@ -1,0 +1,566 @@
+<!-- ============================================================
+     Day 3: Control Flow for Network Logic — if, elif, loops
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- ── Hero ─────────────────────────────────────────────── -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 03</span>
+      <span class="phase-badge" style="background:rgba(88,166,255,0.15); color:#58a6ff; border:1px solid rgba(88,166,255,0.3);">
+        Phase 1 · Fundamentals
+      </span>
+    </div>
+    <h1>Control Flow for Network Logic —<br>if, elif, else &amp; Loops</h1>
+    <p>
+      You know your data types. Now you teach Python how to <em>make decisions</em> with them.
+      Today you build a rogue AP detector, a channel congestion checker, and a
+      connection retry loop — all from scratch.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~55 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>No new libraries</span></div>
+      <div class="hero-stat"><span>🔁</span><span>if · for · while</span></div>
+    </div>
+  </div>
+
+  <!-- ── The Why ───────────────────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>The Manual Tester's Decision Tree</h3>
+      <p>
+        Every time you review a Wi-Fi scan, your brain runs a decision tree without you realising it:
+      </p>
+      <div class="callout">
+        <em>"If the signal is below -75 dBm, flag it as weak. If the security is Open, raise a
+        critical alert. If the channel is 6 and there are 4 other APs on it, mark it as
+        congested. Otherwise, mark it as healthy."</em>
+      </div>
+      <p>
+        You do this for every single AP in the scan. If there are 30 APs in the office,
+        you repeat that decision tree 30 times. Manually. Every test run.
+      </p>
+      <p>
+        <strong>Control flow</strong> is how you hand that decision tree to Python.
+        You write the rules once — Python applies them to every AP in milliseconds, every time,
+        without ever getting tired or making a typo.
+      </p>
+
+      <h3>Three Tools, Infinite Power</h3>
+      <ul>
+        <li><strong>if / elif / else</strong> — make a decision based on a condition</li>
+        <li><strong>for loop</strong> — repeat an action for every item in a collection</li>
+        <li><strong>while loop</strong> — keep repeating until a condition is met (perfect for retry logic)</li>
+      </ul>
+      <p>
+        Combined, these three constructs let you automate <em>any</em> logic a human tester
+        would apply — consistently, at machine speed.
+      </p>
+    </div>
+  </div>
+
+  <!-- ── Requirements ──────────────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🛠</span>
+      <h2>Hardware &amp; Software Requirements</h2>
+    </div>
+    <div class="section-card-body">
+      <table class="req-table">
+        <thead>
+          <tr><th>Requirement</th><th>Details</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Days 1–2 Complete</strong></td>
+            <td>Python environment set up, variables &amp; data types understood</td>
+            <td><span class="req-tag ok">Already done</span></td>
+          </tr>
+          <tr>
+            <td><strong>New Libraries</strong></td>
+            <td>None — pure Python built-ins only</td>
+            <td><span class="req-tag ok">No install needed</span></td>
+          </tr>
+          <tr>
+            <td><strong>Hardware</strong></td>
+            <td>No special Wi-Fi hardware needed today</td>
+            <td><span class="req-tag ok">Any machine</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Code Walkthrough ──────────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>Day03_control_flow.py</code> in your <code>wlan-automation-course/</code>
+        folder. Work through each block in order — each one builds on the last.
+      </p>
+
+      <!-- Block 1 -->
+      <div class="step-label">Block 1 — if / elif / else: Signal Threshold Checker</div>
+      <p>
+        The <code>if</code> statement evaluates a condition. If it's <code>True</code>,
+        that block runs. <code>elif</code> (short for "else if") checks a second condition
+        if the first was <code>False</code>. <code>else</code> is the catch-all that runs
+        when nothing above matched.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day03_control_flow.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 3: Control Flow for Network Logic
+# =============================================================
+
+# --------------------------------------------------
+# BLOCK 1: if / elif / else — Signal Threshold Checker
+# --------------------------------------------------
+
+def classify_signal(rssi: int) -> str:
+    """
+    Classify an RSSI value into a human-readable signal quality label.
+    RSSI is always negative — closer to 0 means stronger signal.
+    """
+    if rssi &gt;= -50:
+        return "Excellent"       # Very close to the AP
+    elif rssi &gt;= -60:
+        return "Good"            # Normal working range
+    elif rssi &gt;= -70:
+        return "Fair"            # Acceptable but not ideal
+    elif rssi &gt;= -80:
+        return "Weak"            # Connectivity issues likely
+    else:
+        return "Critical"        # Below -80 dBm: expect drops
+
+# Test with a range of signal values
+test_rssi_values = [-45, -58, -67, -76, -85]
+
+print("=== Signal Quality Report ===")
+for rssi in test_rssi_values:
+    quality = classify_signal(rssi)
+    print(f"  {rssi:&gt;4} dBm  →  {quality}")</code></pre>
+      </div>
+
+      <!-- Block 2 -->
+      <div class="step-label">Block 2 — Nested if: Multi-Criteria AP Validation</div>
+      <p>
+        Real WLAN tests rarely check just one thing. You can nest <code>if</code> statements
+        inside each other — or combine conditions using <code>and</code> / <code>or</code> —
+        to enforce multiple rules simultaneously.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># --------------------------------------------------
+# BLOCK 2: Nested conditions — Multi-criteria AP check
+# --------------------------------------------------
+
+def validate_ap(ap: dict) -> tuple:
+    """
+    Run multiple checks on a single AP dictionary.
+    Returns (passed: bool, reason: str).
+    """
+    # Check 1: Signal strength
+    if ap["rssi"] &lt; -80:
+        return False, f"Signal too weak ({ap['rssi']} dBm)"
+
+    # Check 2: Security must not be Open
+    if ap["security"] == "Open":
+        return False, "Open network — no encryption"
+
+    # Check 3: Must be on a non-overlapping 2.4 GHz channel OR any 5/6 GHz channel
+    bad_24ghz_channels = [2, 3, 4, 5, 7, 8, 9, 10]  # overlapping channels
+    if ap["band"] == "2.4GHz" and ap["channel"] in bad_24ghz_channels:
+        return False, f"Overlapping 2.4 GHz channel ({ap['channel']})"
+
+    # All checks passed
+    return True, "All checks passed"
+
+
+# Simulate a scan with mixed results
+scan_results = [
+    {"ssid": "CorpNet_5G",   "rssi": -62, "band": "5GHz",   "channel": 36,  "security": "WPA3"},
+    {"ssid": "CorpNet_2G",   "rssi": -71, "band": "2.4GHz", "channel": 1,   "security": "WPA2"},
+    {"ssid": "Guest_Open",   "rssi": -65, "band": "2.4GHz", "channel": 6,   "security": "Open"},
+    {"ssid": "Weak_AP",      "rssi": -85, "band": "5GHz",   "channel": 44,  "security": "WPA2"},
+    {"ssid": "BadChannel_AP","rssi": -60, "band": "2.4GHz", "channel": 3,   "security": "WPA2"},
+]
+
+print("\n=== Multi-Criteria AP Validation ===")
+for ap in scan_results:
+    passed, reason = validate_ap(ap)
+    status = "PASS ✓" if passed else "FAIL ✗"
+    print(f"  [{status}]  {ap['ssid']:&lt;18}  {reason}")</code></pre>
+      </div>
+
+      <!-- Block 3 -->
+      <div class="step-label">Block 3 — for Loop: Iterating Scan Results</div>
+      <p>
+        A <code>for</code> loop runs a block of code once for every item in a list.
+        This is how you process every AP in a scan, every SSID in a test plan,
+        every channel in a frequency band — without copy-pasting code.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># --------------------------------------------------
+# BLOCK 3: for loop — Channel Congestion Checker
+# --------------------------------------------------
+
+def check_channel_congestion(scan_results: list, threshold: int = 3) -> dict:
+    """
+    Count how many APs are on each channel.
+    Flag channels where the count exceeds the threshold.
+
+    Returns a dict: { channel_number: ap_count }
+    """
+    channel_counts = {}  # Empty dict — we'll populate it as we loop
+
+    for ap in scan_results:
+        ch = ap["channel"]
+
+        # If this channel is already in the dict, increment the count
+        # Otherwise, start the count at 1
+        if ch in channel_counts:
+            channel_counts[ch] += 1
+        else:
+            channel_counts[ch] = 1
+
+    return channel_counts
+
+
+# Use the same scan_results list from Block 2
+channel_counts = check_channel_congestion(scan_results)
+
+print("\n=== Channel Congestion Report ===")
+for channel, count in sorted(channel_counts.items()):
+    bar = "█" * count           # Visual bar chart — one block per AP
+    flag = " ⚠ CONGESTED" if count &gt;= 3 else ""
+    print(f"  Ch {channel:&gt;3}  {bar}  ({count} APs){flag}")</code></pre>
+      </div>
+
+      <!-- Block 4 -->
+      <div class="step-label">Block 4 — List Comprehension: Filter in One Line</div>
+      <p>
+        Python has a shortcut for building a filtered list called a
+        <strong>list comprehension</strong>. It replaces a full <code>for</code> loop +
+        <code>if</code> + <code>append()</code> with a single, readable line.
+        WLAN testers use this constantly to filter scan results by band, security, or signal.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># --------------------------------------------------
+# BLOCK 4: List comprehension — Filter scan results
+# --------------------------------------------------
+
+# Standard for loop (verbose):
+strong_aps_verbose = []
+for ap in scan_results:
+    if ap["rssi"] &gt; -75:
+        strong_aps_verbose.append(ap)
+
+# Identical result, one line (list comprehension):
+strong_aps = [ap for ap in scan_results if ap["rssi"] &gt; -75]
+
+# Filter: only 5 GHz APs
+only_5ghz = [ap for ap in scan_results if ap["band"] == "5GHz"]
+
+# Filter: only secured APs with good signal
+secure_and_strong = [
+    ap for ap in scan_results
+    if ap["security"] != "Open" and ap["rssi"] &gt; -75
+]
+
+# Extract just the SSIDs from filtered results (transform + filter)
+secure_ssids = [ap["ssid"] for ap in scan_results if ap["security"] != "Open"]
+
+print("\n=== Filtered Results ===")
+print(f"  APs with RSSI &gt; -75 dBm : {[a['ssid'] for a in strong_aps]}")
+print(f"  5 GHz APs only           : {[a['ssid'] for a in only_5ghz]}")
+print(f"  Secure + strong APs      : {[a['ssid'] for a in secure_and_strong]}")
+print(f"  All secured SSIDs        : {secure_ssids}")</code></pre>
+      </div>
+
+      <!-- Block 5 -->
+      <div class="step-label">Block 5 — while Loop: Connection Retry Logic</div>
+      <p>
+        A <code>while</code> loop keeps running as long as a condition is <code>True</code>.
+        This is perfect for retry scenarios — keep trying to connect until it succeeds
+        or you hit a maximum attempt limit. Every real WLAN test framework needs this.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># --------------------------------------------------
+# BLOCK 5: while loop — Connection Retry Logic
+# --------------------------------------------------
+import time
+import random  # We'll simulate random connection success/failure
+
+def attempt_connection(ssid: str) -> bool:
+    """Simulates a connection attempt. Returns True on success, False on failure."""
+    # 60% chance of success — simulates a flaky AP for demonstration
+    return random.random() &lt; 0.6
+
+def connect_with_retry(ssid: str, max_attempts: int = 5, delay_sec: float = 2.0) -> bool:
+    """
+    Try to connect to an SSID up to max_attempts times.
+    Wait delay_sec seconds between each attempt.
+    Returns True if connected, False if all attempts exhausted.
+    """
+    attempt = 1   # Counter starts at 1
+
+    while attempt &lt;= max_attempts:
+        print(f"  [Attempt {attempt}/{max_attempts}] Connecting to '{ssid}'...")
+
+        if attempt_connection(ssid):
+            print(f"  ✓ Connected to '{ssid}' on attempt {attempt}")
+            return True   # Success — exit the loop immediately
+
+        print(f"  ✗ Attempt {attempt} failed.")
+
+        if attempt &lt; max_attempts:
+            print(f"  Waiting {delay_sec}s before retry...")
+            time.sleep(delay_sec)
+
+        attempt += 1  # Increment counter — prevents infinite loop
+
+    # If we reach here, all attempts failed
+    print(f"  [FAIL] Could not connect to '{ssid}' after {max_attempts} attempts.")
+    return False
+
+print("\n=== Connection Retry Test ===")
+result = connect_with_retry("CorpNet_5G", max_attempts=5, delay_sec=1)
+print(f"  Final result: {'PASS' if result else 'FAIL'}")</code></pre>
+      </div>
+
+      <!-- Block 6 -->
+      <div class="step-label">Block 6 — Putting It All Together: Rogue AP Detector</div>
+      <p>
+        Now we combine everything — loops, conditions, filtering — into a single function
+        that scans a list of APs and automatically flags anything suspicious.
+        This is a real-world pattern used in enterprise WLAN security testing.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># --------------------------------------------------
+# BLOCK 6: Rogue AP Detector — all concepts combined
+# --------------------------------------------------
+
+# Approved APs from our network inventory (what SHOULD be there)
+APPROVED_BSSIDS = {
+    "AA:BB:CC:DD:EE:01",
+    "AA:BB:CC:DD:EE:02",
+    "AA:BB:CC:DD:EE:03",
+}
+
+# Extended scan with a rogue AP mixed in
+full_scan = [
+    {"ssid": "CorpNet_5G",  "bssid": "AA:BB:CC:DD:EE:01", "rssi": -62, "security": "WPA3"},
+    {"ssid": "CorpNet_2G",  "bssid": "AA:BB:CC:DD:EE:02", "rssi": -70, "security": "WPA2"},
+    {"ssid": "CorpNet_5G",  "bssid": "FF:EE:DD:CC:BB:AA", "rssi": -55, "security": "WPA3"},  # Rogue!
+    {"ssid": "FreeWiFi",    "bssid": "11:22:33:44:55:66", "rssi": -60, "security": "Open"},   # Rogue!
+    {"ssid": "CorpNet_IoT", "bssid": "AA:BB:CC:DD:EE:03", "rssi": -74, "security": "WPA2"},
+]
+
+def detect_rogues(scan: list, approved: set) -> list:
+    """
+    Compare every scanned AP against the approved BSSID inventory.
+    Flag an AP as rogue if its BSSID is not in the approved set.
+    """
+    rogue_aps = []
+
+    for ap in scan:
+        is_approved = ap["bssid"] in approved
+        is_open     = ap["security"] == "Open"
+
+        if not is_approved or is_open:
+            reason = []
+            if not is_approved: reason.append("Unknown BSSID")
+            if is_open:         reason.append("Open security")
+            rogue_aps.append({**ap, "reasons": " + ".join(reason)})
+
+    return rogue_aps
+
+
+rogues = detect_rogues(full_scan, APPROVED_BSSIDS)
+
+print("\n" + "=" * 55)
+print("  ROGUE AP DETECTION REPORT")
+print("=" * 55)
+print(f"  Total APs scanned : {len(full_scan)}")
+print(f"  Rogues detected   : {len(rogues)}")
+print("-" * 55)
+
+if rogues:
+    for r in rogues:
+        print(f"  ⚠  SSID   : {r['ssid']}")
+        print(f"     BSSID  : {r['bssid']}")
+        print(f"     RSSI   : {r['rssi']} dBm")
+        print(f"     Reason : {r['reasons']}")
+        print()
+else:
+    print("  ✓ No rogue APs detected.")
+
+print("=" * 55)</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Expected Output ───────────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>Run with <code>python Day03_control_flow.py</code>. The retry section output
+      will vary (random), but everything else is deterministic.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">python Day03_control_flow.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre>=== Signal Quality Report ===
+  <span class="t-green">-45 dBm  →  Excellent</span>
+  <span class="t-green">-58 dBm  →  Good</span>
+  <span class="t-yellow">-67 dBm  →  Fair</span>
+  <span class="t-yellow">-76 dBm  →  Weak</span>
+  <span class="t-red">-85 dBm  →  Critical</span>
+
+=== Multi-Criteria AP Validation ===
+  [<span class="t-green">PASS ✓</span>]  CorpNet_5G         All checks passed
+  [<span class="t-green">PASS ✓</span>]  CorpNet_2G         All checks passed
+  [<span class="t-red">FAIL ✗</span>]  Guest_Open         Open network — no encryption
+  [<span class="t-red">FAIL ✗</span>]  Weak_AP            Signal too weak (-85 dBm)
+  [<span class="t-red">FAIL ✗</span>]  BadChannel_AP      Overlapping 2.4 GHz channel (3)
+
+=== Channel Congestion Report ===
+  Ch   1  █  (1 APs)
+  Ch   3  █  (1 APs)
+  Ch   6  █  (1 APs)
+  Ch  36  ██  (2 APs)
+  Ch  44  █  (1 APs)
+
+=== Filtered Results ===
+  APs with RSSI &gt; -75 dBm : ['CorpNet_5G', 'Guest_Open', 'BadChannel_AP']
+  5 GHz APs only           : ['CorpNet_5G', 'Weak_AP']
+  Secure + strong APs      : ['CorpNet_5G', 'BadChannel_AP']
+  All secured SSIDs        : ['CorpNet_5G', 'CorpNet_2G', 'Weak_AP', 'BadChannel_AP']
+
+=== Connection Retry Test ===
+  [Attempt 1/5] Connecting to 'CorpNet_5G'...
+  ✗ Attempt 1 failed.
+  Waiting 1s before retry...
+  [Attempt 2/5] Connecting to 'CorpNet_5G'...
+  <span class="t-green">✓ Connected to 'CorpNet_5G' on attempt 2</span>
+  Final result: PASS
+
+=======================================================
+  ROGUE AP DETECTION REPORT
+=======================================================
+  Total APs scanned : 5
+  <span class="t-red">Rogues detected   : 2</span>
+-------------------------------------------------------
+  <span class="t-yellow">⚠  SSID   : CorpNet_5G</span>
+     BSSID  : FF:EE:DD:CC:BB:AA
+     RSSI   : -55 dBm
+     Reason : Unknown BSSID
+
+  <span class="t-yellow">⚠  SSID   : FreeWiFi</span>
+     BSSID  : 11:22:33:44:55:66
+     RSSI   : -60 dBm
+     Reason : Unknown BSSID + Open security
+
+=======================================================</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Exercise ─────────────────────────────────────────── -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Extend the rogue AP detector by adding a <strong>severity level</strong> to each finding.
+        Write a function <code>assign_severity(rogue: dict) -> str</code> that returns:
+      </p>
+      <ul>
+        <li><strong>"Critical"</strong> — if the AP is Open AND has an unknown BSSID</li>
+        <li><strong>"High"</strong> — if the AP has an unknown BSSID but is encrypted</li>
+        <li><strong>"Medium"</strong> — if the AP is Open but the BSSID is in the approved list</li>
+      </ul>
+      <p>
+        Then loop over the <code>rogues</code> list, call your function on each one,
+        and print a final summary showing how many Critical, High, and Medium findings exist.
+      </p>
+      <div class="hint-box">
+        <strong>Hint:</strong> Check multiple conditions with <code>and</code>:
+        <code>if "Unknown BSSID" in r["reasons"] and "Open" in r["reasons"]</code>.
+        Use a dictionary to count severities: <code>counts = {"Critical": 0, "High": 0, "Medium": 0}</code>
+        and increment with <code>counts[severity] += 1</code>.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── What's Next ──────────────────────────────────────── -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#58a6ff; margin-bottom:4px;">
+            Up Next · Day 4
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Functions — Reusable Building Blocks for Testers
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            You've written validation logic inside loops, inside conditions, inside more loops.
+            Tomorrow you learn how to package all of that into clean, reusable functions —
+            so you write the logic once and call it a thousand times.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

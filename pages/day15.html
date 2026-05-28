@@ -1,0 +1,377 @@
+<!-- ============================================================
+     Day 15: Interface State Management
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 15</span>
+      <span class="phase-badge" style="background:rgba(63,185,80,0.15); color:#3fb950; border:1px solid rgba(63,185,80,0.3);">
+        Phase 2 · OS &amp; Interfaces
+      </span>
+    </div>
+    <h1>Interface State Management —<br>Context Managers &amp; Safe Mode Switching</h1>
+    <p>
+      What happens when your monitor-mode test crashes halfway through? Your adapter stays
+      in monitor mode, your machine loses Wi-Fi, and your next test run fails silently.
+      Today you'll build a context manager that guarantees interfaces always return to their
+      original state — plus a pre-test checklist that validates your environment before
+      running anything.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~55 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>subprocess · contextlib</span></div>
+      <div class="hero-stat"><span>🔧</span><span>Context managers · yield</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>The Resource Leak Problem in WLAN Testing</h3>
+      <p>
+        When a test script changes a Wi-Fi interface to monitor mode, it creates a
+        <em>resource obligation</em>: the obligation to restore it when done.
+        If the script crashes, hits a keyboard interrupt, or encounters an exception,
+        the restore code in a plain <code>finally</code> block might not run.
+        More importantly, if 10 different test functions all manage interface state
+        individually, you have 10 places to get it wrong.
+      </p>
+
+      <div class="callout">
+        <strong>Context managers encode "set up and tear down" as a unit.</strong><br>
+        The <code>with monitor_mode("wlan0") as iface:</code> pattern guarantees that
+        the interface is put into monitor mode on entry and restored on exit — even
+        if the body raises an exception. This is the same pattern Python uses for file
+        handles, database connections, and locks.
+      </div>
+
+      <h3>The contextlib.contextmanager Decorator</h3>
+      <p>
+        You can turn any generator function into a context manager using
+        <code>@contextlib.contextmanager</code>. Code before the <code>yield</code>
+        runs on entry (<code>__enter__</code>). Code after the <code>yield</code>
+        runs on exit (<code>__exit__</code>), whether the block completed normally
+        or raised an exception. The <code>yield</code> expression is what appears as
+        <code>as iface</code> in the <code>with</code> statement.
+      </p>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — Interface Info, Context Manager &amp; Preflight Check</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>Day15_interface_mgmt.py</code>. The building blocks here become
+        shared fixtures in your pytest test suite starting Day 29.
+      </p>
+
+      <div class="step-label">Block 1 — get_interface_info()</div>
+      <p>
+        Before changing anything, always read the current state. This function captures
+        a snapshot of the interface's current mode, IP address, and whether it's up —
+        so you can restore it exactly.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day15_interface_mgmt.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 15: Interface State Management
+# =============================================================
+
+import subprocess
+import contextlib
+import re
+
+def get_interface_info(interface):
+    """
+    Read current interface state: mode, flags, IPv4 address.
+    Returns a dict with all relevant state for later restoration.
+    """
+    result = subprocess.run(
+        ["iw", "dev", interface, "info"],
+        capture_output=True, text=True
+    )
+
+    info = {"interface": interface, "mode": "managed", "up": False, "ip": None}
+
+    # Extract current mode (managed / monitor / AP)
+    m = re.search(r"type (\w+)", result.stdout)
+    if m:
+        info["mode"] = m.group(1)
+
+    # Check if interface is UP via ip link show
+    link_result = subprocess.run(
+        ["ip", "link", "show", interface], capture_output=True, text=True
+    )
+    info["up"] = "UP" in link_result.stdout
+
+    # Get IPv4 address if assigned
+    addr_result = subprocess.run(
+        ["ip", "-4", "addr", "show", interface], capture_output=True, text=True
+    )
+    ip_m = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", addr_result.stdout)
+    if ip_m:
+        info["ip"] = ip_m.group(1)
+
+    return info
+
+info = get_interface_info("wlan0")
+print(f"[Interface Info] {info}")</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — monitor_mode() Context Manager</div>
+      <p>
+        The <code>@contextlib.contextmanager</code> decorator is the cleanest way to
+        write a context manager without defining a full class with <code>__enter__</code>
+        and <code>__exit__</code>. The code before <code>yield</code> sets up; the code
+        after <code>yield</code> tears down in a <code>finally</code> block.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># ── Block 2: monitor_mode() context manager ──────────────────
+
+@contextlib.contextmanager
+def monitor_mode(interface="wlan0"):
+    """
+    Context manager that switches an interface to monitor mode,
+    yields the monitor interface name, then restores managed mode.
+
+    Usage:
+        with monitor_mode("wlan0") as mon_iface:
+            sniff(iface=mon_iface, ...)
+        # Interface is automatically restored here
+    """
+    # ── Setup (runs on 'with' entry) ──────────────────────────
+    original_info = get_interface_info(interface)
+    print(f"[+] Entering monitor mode on {interface}")
+
+    subprocess.run(["ip", "link", "set", interface, "down"],  check=True)
+    subprocess.run(["iw", "dev", interface, "set", "type", "monitor"], check=True)
+    subprocess.run(["ip", "link", "set", interface, "up"], check=True)
+
+    mon_iface = interface   # Some drivers rename to wlan0mon — check if needed
+
+    try:
+        yield mon_iface   # ← The 'as' variable in the with statement
+
+    finally:
+        # ── Teardown (always runs, even on exception) ─────────
+        print(f"[+] Restoring {interface} to {original_info['mode']} mode")
+        subprocess.run(["ip", "link", "set", interface, "down"], check=True)
+        subprocess.run(["iw", "dev", interface, "set", "type",
+                         original_info["mode"]], check=True)
+        subprocess.run(["ip", "link", "set", interface, "up"], check=True)
+        print(f"[✓] {interface} restored")
+
+# Usage example:
+# with monitor_mode("wlan0") as iface:
+#     sniff(iface=iface, count=10, prn=print)</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — check_monitor_support()</div>
+      <p>
+        Not all Wi-Fi adapters support monitor mode. Attempting to set monitor mode on
+        an unsupported adapter will fail silently or produce unexpected behaviour. This
+        check catches the problem early with a clear error message.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># ── Block 3: Check monitor mode support ──────────────────────
+
+def check_monitor_support(interface):
+    """
+    Check if the interface supports monitor mode.
+    Uses 'iw phy' to query supported interface types.
+    """
+    # Get the phy name for this interface
+    iw_result = subprocess.run(
+        ["iw", "dev", interface, "info"], capture_output=True, text=True
+    )
+    phy_m = re.search(r"wiphy (\d+)", iw_result.stdout)
+    if not phy_m:
+        return False, "Could not determine phy number"
+
+    phy = f"phy{phy_m.group(1)}"
+    phy_result = subprocess.run(
+        ["iw", "phy", phy, "info"], capture_output=True, text=True
+    )
+
+    if "monitor" in phy_result.stdout.lower():
+        return True, f"{interface} supports monitor mode"
+    else:
+        return False, f"{interface} does NOT support monitor mode"
+
+ok, msg = check_monitor_support("wlan0")
+print(f"[Monitor Support] {msg}")</code></pre>
+      </div>
+
+      <div class="step-label">Block 4 — pre_test_checklist()</div>
+      <p>
+        A preflight checklist runs before any test that uses the interface, catching
+        problems early. This becomes a pytest fixture in Day 29.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># ── Block 4: pre_test_checklist() ────────────────────────────
+
+def pre_test_checklist(interface):
+    """
+    Run all pre-test checks before starting a monitor-mode session.
+    Returns True if all checks pass, False otherwise.
+    """
+    checks = []
+
+    # Check 1: Interface exists
+    result = subprocess.run(["ip", "link", "show", interface],
+                            capture_output=True, text=True)
+    checks.append(("Interface exists", result.returncode == 0))
+
+    # Check 2: Monitor mode supported
+    ok, msg = check_monitor_support(interface)
+    checks.append(("Monitor mode support", ok))
+
+    # Check 3: Running as root (required for mode switching)
+    import os
+    checks.append(("Running as root", os.geteuid() == 0))
+
+    # Print results
+    print("\n[Pre-Test Checklist]")
+    all_ok = True
+    for name, passed in checks:
+        icon = "✓" if passed else "✗"
+        status = "PASS" if passed else "FAIL"
+        print(f"  [{icon}] {name:30s} {status}")
+        if not passed:
+            all_ok = False
+
+    return all_ok
+
+all_ok = pre_test_checklist("wlan0")
+print(f"\nChecklist result: {'READY' if all_ok else 'NOT READY'}")</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>Running the preflight check and a mock context manager session on a supported adapter.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ sudo python Day15_interface_mgmt.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-dim">[Interface Info] {'interface': 'wlan0', 'mode': 'managed', 'up': True, 'ip': '192.168.1.42'}</span>
+<span class="t-dim">[Monitor Support] wlan0 supports monitor mode</span>
+
+<span class="t-green">[Pre-Test Checklist]</span>
+  [<span class="t-green">✓</span>] Interface exists               PASS
+  [<span class="t-green">✓</span>] Monitor mode support            PASS
+  [<span class="t-green">✓</span>] Running as root                 PASS
+
+Checklist result: <span class="t-green">READY</span>
+
+<span class="t-green">[+] Entering monitor mode on wlan0</span>
+<span class="t-dim">  ... test code runs here ...</span>
+<span class="t-green">[+] Restoring wlan0 to managed mode</span>
+<span class="t-green">[✓] wlan0 restored</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Harden the interface management module for production use:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Extend <code>get_interface_info()</code> to also
+          record the current channel (using <code>iw dev &lt;iface&gt; info</code> and parsing
+          the <code>channel</code> field). Restore the original channel after the
+          context manager exits — not just the mode.</li>
+        <li><strong>Task 2:</strong> Add a timeout parameter to <code>monitor_mode()</code>:
+          if the test code inside the <code>with</code> block runs longer than the timeout,
+          automatically exit monitor mode and raise a <code>TimeoutError</code>. Use
+          <code>signal.alarm()</code> on Linux.</li>
+        <li><strong>Bonus:</strong> Write a <code>save_interface_state(interface, path)</code>
+          function that writes the interface state dict to a JSON file. Add a
+          <code>restore_from_file(path)</code> function for disaster recovery —
+          if your script is killed with SIGKILL (not just SIGTERM), you can run
+          the restore script manually to recover the interface.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> For the timeout pattern use
+        <code>signal.signal(signal.SIGALRM, handler)</code> and
+        <code>signal.alarm(seconds)</code> before the <code>yield</code> in your
+        context manager. Call <code>signal.alarm(0)</code> in the <code>finally</code>
+        block to cancel the alarm on clean exit.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#3fb950; margin-bottom:4px;">
+            Up Next · Day 16
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Phase 2 Capstone: Multi-Channel AP Scanner
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            You have all the pieces: channel hopping, beacon parsing, frame filtering,
+            and interface management. Tomorrow you combine them into a complete
+            multi-channel AP scanner that produces a full CSV report of every AP
+            discovered across the RF spectrum.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

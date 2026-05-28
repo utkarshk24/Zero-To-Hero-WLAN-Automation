@@ -1,0 +1,323 @@
+<!-- ============================================================
+     Day 19: Decoding 802.11 Information Elements
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 19</span>
+      <span class="phase-badge" style="background:rgba(210,153,34,0.15); color:#d29922; border:1px solid rgba(210,153,34,0.3);">
+        Phase 3 · Core Automation
+      </span>
+    </div>
+    <h1>Decoding 802.11 IEs —<br>Security Classification from Beacon Data</h1>
+    <p>
+      The RSN Information Element inside every WPA2/WPA3 beacon contains the complete
+      security profile of the AP — cipher suites, authentication methods, and management
+      frame protection status. Today you'll decode it byte by byte and build a
+      <code>classify_security()</code> function that returns WPA3, WPA2-Enterprise,
+      WPA2-Personal, or Open from raw beacon data.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~60 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>scapy · struct</span></div>
+      <div class="hero-stat"><span>🔐</span><span>WPA3 · WPA2 · AKM suites</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>Why Decode IEs Yourself?</h3>
+      <p>
+        OS tools report security as a simple string: "WPA2-Personal" or "Open". But that
+        hides critical details. An AP might report "WPA2" while actually using TKIP
+        (deprecated, vulnerable) instead of CCMP. Another might claim WPA3 but have
+        Transition Mode enabled, allowing WPA2 connections — a security downgrade risk.
+        Decoding the RSN IE yourself gives you the raw truth: exactly which cipher suites
+        and authentication methods the AP advertises.
+      </p>
+
+      <div class="callout">
+        <strong>AKM Suite Selectors identify the authentication method.</strong><br>
+        AKM 1 = 802.1X/EAP (Enterprise), AKM 2 = PSK (WPA2-Personal),
+        AKM 8 = SAE (WPA3), AKM 18 = OWE (Opportunistic Wireless Encryption,
+        WPA3-Open). The AKM suite bytes in the RSN IE tell you exactly what
+        authentication the AP supports — no guessing required.
+      </div>
+
+      <h3>The RSN Information Element Structure</h3>
+      <p>
+        The RSN IE (ID 48) starts with a 2-byte version field (always 1), followed by a
+        4-byte Group Cipher Suite, a 2-byte Pairwise Cipher Suite count, N×4-byte pairwise
+        suites, a 2-byte AKM suite count, and N×4-byte AKM suites. Each suite selector
+        is a 3-byte OUI followed by a 1-byte suite type. The OUI <code>00:0F:AC</code>
+        identifies IEEE 802.11i suites.
+      </p>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — walk_ies(), decode_rsn_ie(), classify_security()</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>Day19_decode_ies.py</code>. The RSN decoder works directly on the
+        raw bytes of the IE data, using Python's <code>struct</code> module to unpack
+        the binary fields.
+      </p>
+
+      <div class="step-label">Block 1 — IE ID Reference Table</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day19_decode_ies.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 19: Decoding 802.11 Information Elements
+# =============================================================
+
+import struct
+from scapy.all import sniff, Dot11, Dot11Beacon, Dot11Elt, RadioTap
+
+# Cipher suite type → name mapping (OUI 00:0F:AC)
+CIPHER_SUITES = {
+    0: "None", 1: "WEP-40",  2: "TKIP",   3: "WRAP",
+    4: "CCMP", 5: "WEP-104", 6: "BIP",    8: "GCMP",
+}
+
+# AKM (Authentication and Key Management) suite type → name
+AKM_SUITES = {
+    1:  "802.1X (Enterprise)",   # EAP/RADIUS authentication
+    2:  "PSK (WPA2-Personal)",   # Pre-Shared Key
+    3:  "FT-802.1X",             # Fast Transition with Enterprise
+    4:  "FT-PSK",                # Fast Transition with PSK
+    5:  "802.1X-SHA256",
+    6:  "PSK-SHA256",
+    8:  "SAE (WPA3-Personal)",   # Simultaneous Authentication of Equals
+    11: "FT-SAE",
+    18: "OWE (WPA3-Open)",       # Opportunistic Wireless Encryption
+}
+
+print("AKM Suite Reference:")
+for code, name in AKM_SUITES.items():
+    print(f"  {code:3d} → {name}")</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — decode_rsn_ie() Binary Parser</div>
+      <p>
+        <code>struct.unpack_from()</code> reads typed values from a byte buffer at a
+        given offset. The format string <code>"&lt;H"</code> means: little-endian
+        unsigned short (2 bytes). This is exactly how the RSN IE binary structure
+        is defined in the 802.11 specification.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def decode_rsn_ie(rsn_bytes):
+    """
+    Decode the raw bytes of an RSN Information Element.
+    Returns: {version, group_cipher, pairwise_ciphers, akm_suites, pmf_required}
+    """
+    if len(rsn_bytes) &lt; 4:
+        return None
+
+    offset = 0
+    # Version: 2 bytes, little-endian unsigned short
+    version = struct.unpack_from("&lt;H", rsn_bytes, offset)[0]
+    offset += 2
+
+    # Group Cipher Suite: 3-byte OUI + 1-byte type
+    group_oui  = rsn_bytes[offset:offset+3]
+    group_type = rsn_bytes[offset+3]
+    group_cipher = CIPHER_SUITES.get(group_type, f"Unknown({group_type})")
+    offset += 4
+
+    # Pairwise Cipher Suites
+    if offset + 2 &gt; len(rsn_bytes):
+        return {"version": version, "group_cipher": group_cipher,
+                "pairwise_ciphers": [], "akm_suites": [], "pmf_required": False}
+
+    pw_count = struct.unpack_from("&lt;H", rsn_bytes, offset)[0]
+    offset += 2
+    pairwise_ciphers = []
+    for _ in range(pw_count):
+        if offset + 4 &gt; len(rsn_bytes):
+            break
+        cipher_type = rsn_bytes[offset+3]
+        pairwise_ciphers.append(CIPHER_SUITES.get(cipher_type, f"Unk({cipher_type})"))
+        offset += 4
+
+    # AKM Suites
+    akm_suites = []
+    if offset + 2 &lt;= len(rsn_bytes):
+        akm_count = struct.unpack_from("&lt;H", rsn_bytes, offset)[0]
+        offset += 2
+        for _ in range(akm_count):
+            if offset + 4 &gt; len(rsn_bytes):
+                break
+            akm_type = rsn_bytes[offset+3]
+            akm_suites.append(AKM_SUITES.get(akm_type, f"Unk({akm_type})"))
+            offset += 4
+
+    # RSN Capabilities (2 bytes) — PMF flags
+    pmf_required = False
+    if offset + 2 &lt;= len(rsn_bytes):
+        rsn_caps = struct.unpack_from("&lt;H", rsn_bytes, offset)[0]
+        pmf_required = bool(rsn_caps &amp; 0x0040)   # Bit 6 = MFP Required
+
+    return {
+        "version":          version,
+        "group_cipher":     group_cipher,
+        "pairwise_ciphers": pairwise_ciphers,
+        "akm_suites":       akm_suites,
+        "pmf_required":     pmf_required,
+    }</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — classify_security()</div>
+      <p>
+        With the RSN IE decoded, classification is straightforward: check the AKM suites
+        to determine the authentication method, then combine with the pairwise cipher to
+        produce a clean human-readable security label.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def classify_security(ies):
+    """
+    Classify AP security from its IE dict (from walk_ies()).
+    Returns: 'WPA3', 'WPA2-Enterprise', 'WPA2-Personal', 'WPA2-TKIP', or 'Open'
+    """
+    if 48 not in ies:
+        return "Open"   # No RSN IE = no WPA2/3
+
+    rsn = decode_rsn_ie(ies[48])
+    if not rsn:
+        return "Open"
+
+    akm_names = " ".join(rsn["akm_suites"])
+
+    if "SAE" in akm_names or "OWE" in akm_names:
+        return "WPA3"
+    if "Enterprise" in akm_names or "802.1X" in akm_names:
+        return "WPA2-Enterprise"
+    if "PSK" in akm_names:
+        # Downgrade flag: TKIP pairwise cipher is deprecated
+        if "TKIP" in rsn["pairwise_ciphers"] and "CCMP" not in rsn["pairwise_ciphers"]:
+            return "WPA2-TKIP"   # Warning: TKIP-only, vulnerable
+        return "WPA2-Personal"
+
+    return "Unknown"</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>The security classifier correctly identifies each AP's authentication method from raw IEs.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ sudo python Day19_decode_ies.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-dim">AKM Suite Reference:
+    1 → 802.1X (Enterprise)
+    2 → PSK (WPA2-Personal)
+    8 → SAE (WPA3-Personal)
+   18 → OWE (WPA3-Open)</span>
+
+<span class="t-green">[Security Classification Results]</span>
+  CorpWifi-5G    → <span class="t-green">WPA2-Personal</span>  (AKM: PSK, Cipher: CCMP)
+  CorpEnterprise → <span class="t-blue">WPA2-Enterprise</span> (AKM: 802.1X, Cipher: CCMP)
+  WPA3-AP        → <span class="t-green">WPA3</span>           (AKM: SAE, Cipher: CCMP, PMF: required)
+  LegacyAP       → <span class="t-yellow">WPA2-TKIP</span>      (AKM: PSK, Cipher: TKIP — DEPRECATED)
+  GuestWifi      → <span class="t-red">Open</span>           (No RSN IE)</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Add PMF (Protected Management Frames) compliance checking:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Extend <code>classify_security()</code> to also
+          return a PMF status: "required" (MFP bit 6 set), "capable" (MFP bit 7 set),
+          or "none". Enterprise deployments should require PMF — flag those that don't
+          as non-compliant.</li>
+        <li><strong>Task 2:</strong> Write a <code>detect_wpa3_transition_mode()</code>
+          function that returns True if the AP advertises both SAE and PSK AKM suites
+          in the same RSN IE — this is WPA3 Transition Mode, which allows WPA2 clients
+          to connect and may be a security concern in high-security environments.</li>
+        <li><strong>Bonus:</strong> Write a full security audit report function that
+          sniffs for 60 seconds and produces a markdown-formatted table with columns:
+          SSID | BSSID | Security | Cipher | PMF | Compliant.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> WPA3 Transition Mode has both AKM type 2 (PSK) and
+        AKM type 8 (SAE) in the same RSN IE. Check:
+        <code>akm_types = [rsn_bytes[offset+3] for ...]</code>
+        then <code>2 in akm_types and 8 in akm_types</code>.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#d29922; margin-bottom:4px;">
+            Up Next · Day 20
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Automating WPA2 Connections
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            You've been passive — scanning and analysing. Tomorrow you take action:
+            programmatically connect to WPA2 SSIDs using nmcli, wait for IP assignment,
+            and test the full connection cycle with a gateway ping.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

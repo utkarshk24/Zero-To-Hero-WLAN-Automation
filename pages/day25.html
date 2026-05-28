@@ -1,0 +1,364 @@
+<!-- ============================================================
+     Day 25: Association Timing Measurement
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 25</span>
+      <span class="phase-badge" style="background:rgba(210,153,34,0.15); color:#d29922; border:1px solid rgba(210,153,34,0.3);">
+        Phase 3 · Core Automation
+      </span>
+    </div>
+    <h1>Association Timing —<br>Measuring Every Phase of Connection</h1>
+    <p>
+      "Connection took 4 seconds" is a bug report. "Probe 20ms, Auth 45ms, Assoc 30ms,
+      4-way handshake 380ms, DHCP 3.1s" is a diagnostic. Today you'll build an
+      <code>AssociationTimer</code> class that marks and measures each phase of the
+      Wi-Fi connection process, then compares results against a baseline.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~55 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>time · subprocess · netifaces</span></div>
+      <div class="hero-stat"><span>⏱</span><span>perf_counter precision</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>Why Timing Data Matters</h3>
+      <p>
+        Enterprise SLA requirements often specify maximum connection times. A deployment
+        acceptance test might require: total connection time &lt; 5 seconds, DHCP assignment
+        &lt; 3 seconds, and roaming time &lt; 150ms. These requirements can only be verified
+        with precise timing instrumentation.
+      </p>
+
+      <div class="callout">
+        <strong>time.perf_counter() is the right tool for phase timing.</strong><br>
+        <code>time.time()</code> can jump forward or backward when the system clock
+        is adjusted (NTP sync). <code>time.perf_counter()</code> is a monotonic timer
+        that never goes backward and has sub-microsecond resolution — the right choice
+        for measuring connection phases in milliseconds.
+      </div>
+
+      <h3>Connection Phases to Measure</h3>
+      <p>
+        The measurable phases in a WPA2 connection are:
+        (1) <strong>Scan latency</strong> — time to find the target SSID;
+        (2) <strong>Authentication</strong> — Open System authentication exchange;
+        (3) <strong>Association</strong> — 802.11 association request/response;
+        (4) <strong>4-Way Handshake</strong> — WPA key exchange (usually the longest
+        crypto phase); (5) <strong>DHCP</strong> — time from association complete to
+        valid IP assigned. Total = sum of all phases.
+      </p>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — AssociationTimer, timed_connect(), check_against_baseline()</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>Day25_assoc_timing.py</code>. The <code>AssociationTimer</code>
+        class instruments the connection process, and <code>check_against_baseline()</code>
+        compares results to expected thresholds.
+      </p>
+
+      <div class="step-label">Block 1 — AssociationTimer Class</div>
+      <p>
+        The timer uses a dict of named marks and computes elapsed time between
+        consecutive marks. This generalises to any multi-phase timing scenario.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day25_assoc_timing.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 25: Association Timing Measurement
+# =============================================================
+
+import time
+import subprocess
+import re
+import netifaces
+from pathlib import Path
+
+class AssociationTimer:
+    """
+    Instruments a connection sequence by recording named time marks.
+    Computes elapsed time between consecutive marks.
+    """
+
+    def __init__(self):
+        self._marks = {}   # {phase_name: perf_counter timestamp}
+        self._order = []   # Preserve insertion order (Python 3.7+)
+
+    def mark(self, phase_name):
+        """Record the current time for a named phase."""
+        t = time.perf_counter()
+        self._marks[phase_name] = t
+        self._order.append(phase_name)
+        return t
+
+    def elapsed_ms(self, start_phase, end_phase):
+        """Return elapsed time in ms between two named marks."""
+        if start_phase not in self._marks or end_phase not in self._marks:
+            return None
+        return round(
+            (self._marks[end_phase] - self._marks[start_phase]) * 1000, 1
+        )
+
+    def total_ms(self):
+        """Return total elapsed time from first to last mark in ms."""
+        if len(self._order) &lt; 2:
+            return None
+        return self.elapsed_ms(self._order[0], self._order[-1])
+
+    def report(self):
+        """Print a formatted timing report."""
+        print("\n[Association Timing Report]")
+        print(f"  {'Phase':25s}  {'Duration':&gt;10s}")
+        print("  " + "-" * 38)
+        for i in range(1, len(self._order)):
+            phase = self._order[i]
+            prev  = self._order[i - 1]
+            ms    = self.elapsed_ms(prev, phase)
+            bar   = "█" * min(30, int((ms or 0) / 50))
+            print(f"  {phase:25s}  {ms:9.1f}ms  {bar}")
+        print("  " + "-" * 38)
+        print(f"  {'TOTAL':25s}  {self.total_ms():9.1f}ms")</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — timed_connect() Measuring Each Phase</div>
+      <p>
+        This function wraps the connection process from Day 20, inserting timer marks
+        at each observable phase transition. We can't mark the 4-way handshake directly
+        (it happens inside wpa_supplicant), so we mark "association requested" and
+        "IP assigned" — and infer the handshake time from the difference.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def get_ip(interface):
+    """Return current IPv4 address or None."""
+    try:
+        addrs = netifaces.ifaddresses(interface)
+        ipv4  = addrs.get(netifaces.AF_INET, [{}])
+        ip = ipv4[0].get("addr", "")
+        return ip if ip and not ip.startswith("169.254.") else None
+    except:
+        return None
+
+def timed_connect(ssid, password, interface="wlan0", timeout=30):
+    """
+    Connect to WPA2 AP with timing instrumentation on each phase.
+    Returns: (timer: AssociationTimer, result: dict)
+    """
+    timer = AssociationTimer()
+
+    # Phase 0: Start
+    timer.mark("start")
+
+    # Phase 1: Scan
+    scan = subprocess.run(
+        ["nmcli", "dev", "wifi", "list", "--rescan", "yes"],
+        capture_output=True, text=True, timeout=20
+    )
+    timer.mark("scan_complete")
+
+    if ssid not in scan.stdout:
+        return timer, {"success": False, "error": f"'{ssid}' not found in scan"}
+
+    # Phase 2: Disconnect (ensure clean state)
+    subprocess.run(["nmcli", "dev", "disconnect", interface], capture_output=True)
+    timer.mark("disconnect_complete")
+
+    # Phase 3: Trigger connection (nmcli handles auth + assoc + handshake)
+    subprocess.run(
+        ["nmcli", "--wait", "0", "dev", "wifi", "connect",
+         ssid, "password", password, "ifname", interface],
+        capture_output=True, text=True
+    )
+    timer.mark("connect_triggered")
+
+    # Phase 4: Poll until association (check for active SSID)
+    deadline = time.perf_counter() + timeout
+    while time.perf_counter() &lt; deadline:
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "ACTIVE,SSID", "dev", "wifi"],
+            capture_output=True, text=True
+        )
+        if f"yes:{ssid}" in result.stdout:
+            timer.mark("associated")
+            break
+        time.sleep(0.1)
+    else:
+        return timer, {"success": False, "error": "Association timeout"}
+
+    # Phase 5: Poll until IP assigned
+    while time.perf_counter() &lt; deadline:
+        ip = get_ip(interface)
+        if ip:
+            timer.mark("ip_assigned")
+            return timer, {"success": True, "ip": ip}
+        time.sleep(0.2)
+
+    return timer, {"success": False, "error": "DHCP timeout"}</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — check_against_baseline()</div>
+      <p>
+        A baseline is a set of threshold values for each phase, typically derived from
+        the AP vendor's specification or from a known-good reference measurement.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">DEFAULT_BASELINE = {
+    "scan_complete":       3000,   # Max 3s for scan
+    "associated":          5000,   # Max 5s for full association
+    "ip_assigned":        10000,   # Max 10s total for DHCP
+}
+
+def check_against_baseline(timer, baseline=None):
+    """
+    Compare timer marks against baseline thresholds.
+    Returns: list of (phase, actual_ms, threshold_ms, passed) tuples
+    """
+    baseline = baseline or DEFAULT_BASELINE
+    results  = []
+    for phase, threshold_ms in baseline.items():
+        if phase in timer._marks:
+            actual_ms = timer.elapsed_ms("start", phase)
+            passed    = actual_ms &lt;= threshold_ms if actual_ms else False
+            results.append((phase, actual_ms, threshold_ms, passed))
+    return results
+
+if __name__ == "__main__":
+    timer, result = timed_connect("CorpWifi-5G", "password123")
+    if result["success"]:
+        timer.report()
+        checks = check_against_baseline(timer)
+        print("\n[Baseline Check]")
+        for phase, actual, threshold, ok in checks:
+            icon = "✓" if ok else "✗"
+            print(f"  [{icon}] {phase:25s}  {actual:7.1f}ms (max {threshold}ms)")
+    else:
+        print(f"[FAIL] {result['error']}")</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>A successful timed connection shows per-phase durations and baseline compliance.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ python Day25_assoc_timing.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-green">[Association Timing Report]</span>
+  Phase                      Duration
+  <span class="t-dim">--------------------------------------</span>
+  scan_complete              2142.3ms  <span class="t-blue">████████████████████████████████████████</span>
+  disconnect_complete          21.4ms  <span class="t-dim">░</span>
+  connect_triggered            48.2ms  <span class="t-dim">░</span>
+  associated                  892.1ms  <span class="t-yellow">████████████████</span>
+  ip_assigned                3214.7ms  <span class="t-dim">--------------------------------------</span>
+  TOTAL                      6318.7ms
+
+<span class="t-green">[Baseline Check]</span>
+  [<span class="t-green">✓</span>] scan_complete             2142.3ms (max 3000ms)
+  [<span class="t-green">✓</span>] associated                3103.0ms (max 5000ms)
+  [<span class="t-green">✓</span>] ip_assigned               6318.7ms (max 10000ms)</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Add repeat testing and statistical analysis to the timing framework:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Write <code>repeated_timed_connect(ssid, password, n=5)</code>
+          that calls <code>timed_connect()</code> N times, collecting timing results.
+          Between each attempt, disconnect and wait 2 seconds. Return a stats dict
+          with min, max, mean, and stdev for each phase.</li>
+        <li><strong>Task 2:</strong> Generate a CSV report from the repeated test results
+          with one row per attempt and aggregated stats in the final row. This is the
+          format required for WLAN certification testing.</li>
+        <li><strong>Bonus:</strong> Add Scapy-based phase measurement: capture frames
+          during connection and use the RadioTap timestamps to measure exact time
+          between the Probe Request and the first Data frame — giving you sub-millisecond
+          precision instead of OS-level polling.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> For statistics, use <code>import statistics</code>:
+        <code>statistics.mean(values)</code>, <code>statistics.stdev(values)</code>,
+        <code>min(values)</code>, <code>max(values)</code>. These work on any list
+        of numbers and handle edge cases (like stdev with 1 value) gracefully.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#d29922; margin-bottom:4px;">
+            Up Next · Day 26
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Phase 3 Capstone: Connection Validator
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            Everything you've built in Phase 3 combines into one tool: a 5-stage
+            connection validator that scans, connects, validates DHCP, tests DNS,
+            checks connectivity, and produces a JSON report with a CI-friendly exit code.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

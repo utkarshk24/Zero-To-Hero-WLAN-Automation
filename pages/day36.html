@@ -1,0 +1,167 @@
+<div class="day-content">
+
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-tag">Day 36</span>
+      <span class="phase-tag phase-5">Phase 5 — Advanced Scenarios &amp; CI/CD</span>
+    </div>
+    <h1 class="day-hero-title">Roaming Test Automation (802.11r/k/v)</h1>
+    <p class="day-hero-sub">
+      Enterprise WLAN certification requires measurable roaming performance. Today you'll
+      automate roaming triggers, measure roaming latency, verify BSS Transition Management,
+      and validate that 802.11r Fast Transition keeps interruption under 50 ms.
+    </p>
+    <div class="day-hero-tags">
+      <span class="tag">802.11r</span>
+      <span class="tag">802.11k</span>
+      <span class="tag">802.11v</span>
+      <span class="tag">Roaming Latency</span>
+      <span class="tag">BSS Transition</span>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h2 class="section-title">Roaming Standards Reference</h2>
+    <div class="requirements-table">
+      <table>
+        <thead><tr><th>Standard</th><th>Name</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td>802.11r</td><td>Fast BSS Transition (FT)</td><td>Pre-authenticates to the target AP — reduces roaming latency to &lt;50 ms</td></tr>
+          <tr><td>802.11k</td><td>Radio Resource Management</td><td>AP provides neighbor reports — client knows which APs to roam to</td></tr>
+          <tr><td>802.11v</td><td>BSS Transition Management</td><td>AP can suggest or force a client to roam</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h2 class="section-title">1 — Detecting Roaming Capability</h2>
+    <div class="code-block-wrapper">
+      <div class="code-block-header">
+        <span class="code-lang">python</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <pre><code class="language-python">
+import subprocess, re
+
+def check_roaming_capabilities(interface="wlan0"):
+    """Check which 802.11r/k/v capabilities are active on the current connection."""
+    result = subprocess.run(
+        ["iw", "dev", interface, "link"],
+        capture_output=True, text=True
+    )
+    output = result.stdout.lower()
+    caps = {
+        "802.11r_ft":  "ft" in output or "fast-transition" in output,
+        "802.11k_rrm": "rrm" in output or "radio-resource" in output,
+        "802.11v_btm": "bss-trans" in output or "btm" in output,
+    }
+    for cap, supported in caps.items():
+        print(f"  {cap}: {'Supported' if supported else 'Not detected'}")
+    return caps
+
+
+def get_current_bssid(interface="wlan0"):
+    """Return the BSSID of the currently associated AP."""
+    r = subprocess.run(["iw", "dev", interface, "link"], capture_output=True, text=True)
+    m = re.search(r"Connected to ([0-9a-f:]{17})", r.stdout, re.IGNORECASE)
+    return m.group(1).upper() if m else None
+      </code></pre>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h2 class="section-title">2 — Measuring Roaming Latency</h2>
+    <div class="code-block-wrapper">
+      <div class="code-block-header">
+        <span class="code-lang">python</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <pre><code class="language-python">
+import time, threading
+
+def measure_roaming_latency(interface="wlan0", target_bssid=None, timeout=10):
+    """
+    Measure time from current BSSID → new BSSID.
+    Returns latency_ms or None on timeout.
+    """
+    original_bssid = get_current_bssid(interface)
+    if not original_bssid:
+        return None, "Not connected"
+
+    print(f"Monitoring roam from {original_bssid}...")
+    start = time.perf_counter()
+    deadline = start + timeout
+
+    while time.perf_counter() < deadline:
+        current = get_current_bssid(interface)
+        if current and current != original_bssid:
+            if target_bssid is None or current == target_bssid.upper():
+                latency = (time.perf_counter() - start) * 1000
+                return round(latency, 1), None
+        time.sleep(0.01)   # 10 ms poll
+
+    return None, f"No roam detected within {timeout}s"
+
+
+def trigger_roam_via_btm(interface="wlan0", target_bssid=None):
+    """Send BSS Transition Management request to trigger a roam (wpa_cli)."""
+    cmd = ["wpa_cli", "-i", interface, "roam"]
+    if target_bssid:
+        cmd.append(target_bssid)
+    subprocess.run(cmd, capture_output=True)
+
+
+# Test flow:
+# trigger_roam_via_btm("wlan0", "00:11:22:33:44:02")
+# latency, err = measure_roaming_latency("wlan0", timeout=5)
+# print(f"Roaming latency: {latency} ms")
+      </code></pre>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h2 class="section-title">3 — Roaming Test with PyTest</h2>
+    <div class="code-block-wrapper">
+      <div class="code-block-header">
+        <span class="code-lang">python</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <pre><code class="language-python">
+import pytest, allure
+
+ROAMING_LATENCY_LIMIT_MS = 150   # Wi-Fi 6 typical target: &lt;50 ms, conservative: &lt;150 ms
+
+@allure.feature("Roaming")
+@allure.severity(allure.severity_level.CRITICAL)
+@pytest.mark.live
+def test_roaming_latency():
+    """Roaming must complete within the latency limit."""
+    before = get_current_bssid("wlan0")
+    allure.attach(f"Source BSSID: {before}", name="Pre-roam state")
+
+    trigger_roam_via_btm("wlan0")
+    latency, err = measure_roaming_latency("wlan0", timeout=5)
+
+    after = get_current_bssid("wlan0")
+    allure.attach(f"Target BSSID: {after}\nLatency: {latency} ms", name="Post-roam state")
+
+    assert err is None, f"Roaming failed: {err}"
+    assert latency <= ROAMING_LATENCY_LIMIT_MS, \
+        f"Roaming too slow: {latency} ms > {ROAMING_LATENCY_LIMIT_MS} ms"
+    assert before != after, "BSSID did not change — no roaming occurred"
+      </code></pre>
+    </div>
+  </div>
+
+  <div class="exercise-card">
+    <div class="exercise-header">
+      <span class="exercise-icon">🏋️</span>
+      <h3 class="exercise-title">Day 36 Exercise</h3>
+    </div>
+    <p>Write a <code>roaming_stress_test(rounds=10)</code> that triggers roaming 10 times between
+    two APs, records the latency for each roam, and reports mean/min/max. Flag any roam that
+    exceeded 200 ms as a failure. Save results to CSV.</p>
+  </div>
+
+</div>

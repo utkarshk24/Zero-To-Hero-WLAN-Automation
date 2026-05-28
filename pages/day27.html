@@ -1,0 +1,322 @@
+<!-- ============================================================
+     Day 27: Introduction to PyTest
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 27</span>
+      <span class="phase-badge" style="background:rgba(163,113,247,0.15); color:#a371f7; border:1px solid rgba(163,113,247,0.3);">
+        Phase 4 · Test Frameworks
+      </span>
+    </div>
+    <h1>Introduction to PyTest —<br>Professional Test Structure</h1>
+    <p>
+      pytest is the gold standard for Python testing. It discovers tests automatically,
+      generates beautiful reports, handles failures gracefully, and scales from a single
+      function to a thousand-test suite. Today you'll learn the naming conventions,
+      assertion patterns, and test organisation that power every serious WLAN automation
+      framework.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~50 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>pytest</span></div>
+      <div class="hero-stat"><span>🧪</span><span>assert · marks · fixtures</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>Scripts vs. Tests</h3>
+      <p>
+        Your Phase 3 scripts verify connection quality — but they print results to a
+        terminal and exit. A pytest test suite does something fundamentally different:
+        it structures assertions as pass/fail facts, generates machine-readable reports,
+        integrates with CI systems, and allows test selection, parallelisation, and
+        retrying failed tests automatically.
+      </p>
+
+      <div class="callout">
+        <strong>pytest's power is in its convention-over-configuration approach.</strong><br>
+        Name a file <code>test_*.py</code> and a function <code>test_*</code> inside it,
+        and pytest finds and runs it automatically — no registration, no test class
+        required. Write <code>assert result == expected</code> and pytest gives you a
+        beautiful diff when it fails. That's the whole framework in two sentences.
+      </div>
+
+      <h3>The assert Statement in pytest</h3>
+      <p>
+        In raw Python, <code>assert x == y</code> raises an obscure <code>AssertionError</code>
+        with no context. pytest rewrites assert statements at import time — when the
+        assertion fails, it shows you the actual values of <code>x</code> and <code>y</code>,
+        any list differences, dict key mismatches, and string diffs. This context is
+        invaluable for diagnosing WLAN test failures.
+      </p>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — Test Naming, Assertions, marks, and pytest.raises()</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Install pytest: <code>pip install pytest</code>. Create <code>test_day27.py</code>.
+        Run tests with: <code>pytest test_day27.py -v</code>.
+      </p>
+
+      <div class="step-label">Block 1 — Test Naming Convention and Basic Assertions</div>
+      <p>
+        pytest discovers any function that starts with <code>test_</code> in any file
+        that starts with <code>test_</code>. No inheritance, no boilerplate — just
+        functions and asserts.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">test_day27.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 27: pytest Introduction
+# Run with: pytest test_day27.py -v
+# =============================================================
+
+# Import the function we want to test (from Day 4's wlan_utils.py)
+# Using inline implementations here for self-contained demo
+
+def classify_signal(rssi):
+    """Classify RSSI dBm value into quality label."""
+    if rssi &gt;= -50: return "Excellent"
+    if rssi &gt;= -60: return "Good"
+    if rssi &gt;= -70: return "Fair"
+    return "Poor"
+
+def rssi_to_percent(rssi):
+    """Convert RSSI to 0-100% quality score."""
+    rssi = max(-100, min(-50, rssi))
+    return int((rssi + 100) * 2)
+
+# ── Block 1: Basic assertions ──────────────────────────────────
+
+def test_classify_excellent():
+    """RSSI of -42 should be Excellent."""
+    assert classify_signal(-42) == "Excellent"
+
+def test_classify_good():
+    assert classify_signal(-58) == "Good"
+
+def test_classify_fair():
+    assert classify_signal(-67) == "Fair"
+
+def test_classify_poor():
+    assert classify_signal(-81) == "Poor"
+
+def test_classify_boundary_excellent():
+    """Test the boundary value: -50 should be Excellent."""
+    assert classify_signal(-50) == "Excellent"
+
+def test_classify_boundary_good():
+    """-51 should be Good (just below Excellent boundary)."""
+    assert classify_signal(-51) == "Good"
+
+def test_rssi_to_percent_min():
+    """RSSI -100 dBm should map to 0%."""
+    assert rssi_to_percent(-100) == 0
+
+def test_rssi_to_percent_max():
+    """RSSI -50 dBm (clamped max) should map to 100%."""
+    assert rssi_to_percent(-50) == 100
+
+def test_rssi_to_percent_middle():
+    """RSSI -75 dBm should map to 50%."""
+    assert rssi_to_percent(-75) == 50</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — pytest.raises() and Expected Failures</div>
+      <p>
+        <code>pytest.raises()</code> is a context manager that asserts a specific
+        exception IS raised. This is essential for testing error handling — you want
+        to verify that invalid inputs raise the right errors.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">import pytest
+
+def parse_channel(channel_str):
+    """Parse a channel string to int; raise ValueError for invalid input."""
+    ch = int(channel_str)
+    if ch &lt; 1 or ch &gt; 165:
+        raise ValueError(f"Channel {ch} is out of valid range 1-165")
+    return ch
+
+# ── Block 2: Testing exceptions ────────────────────────────────
+
+def test_parse_channel_valid():
+    assert parse_channel("36") == 36
+
+def test_parse_channel_invalid_range():
+    """Channel 200 should raise ValueError."""
+    with pytest.raises(ValueError, match="out of valid range"):
+        parse_channel("200")
+
+def test_parse_channel_invalid_type():
+    """Non-numeric string should raise ValueError."""
+    with pytest.raises(ValueError):
+        parse_channel("notachannel")
+
+# ── Block 3: pytest.mark for skipping and expected failures ────
+
+@pytest.mark.skip(reason="Requires physical Wi-Fi adapter")
+def test_live_rssi():
+    """This test needs real hardware — skip in CI without adapter."""
+    from Day24_rssi_monitor import get_rssi
+    rssi = get_rssi("wlan0")
+    assert rssi is not None
+    assert -100 &lt;= rssi &lt;= 0
+
+@pytest.mark.xfail(reason="Known nmcli bug on Ubuntu 20.04 — fix pending")
+def test_known_broken_feature():
+    """Mark tests as expected-to-fail without removing them."""
+    # This assertion is known to fail — logged as xfail, not FAIL
+    assert parse_channel("0") == 0   # 0 should fail our range check</code></pre>
+      </div>
+
+      <div class="step-label">Block 4 — Running pytest and Reading Output</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Bash</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-bash"># Run all tests in verbose mode
+pytest test_day27.py -v
+
+# Run only tests matching a keyword
+pytest test_day27.py -v -k "boundary"
+
+# Run and stop on first failure
+pytest test_day27.py -v -x
+
+# Show extra information on failure (full local variables)
+pytest test_day27.py -v --tb=long
+
+# Count passing, failing, skipped
+pytest test_day27.py -v --tb=short -q</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>pytest -v shows each test with a PASS/FAIL/SKIP result and a summary at the end.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ pytest test_day27.py -v</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-dim">========================= test session starts =========================</span>
+<span class="t-dim">collected 13 items</span>
+
+test_day27.py::<span class="t-green">test_classify_excellent           PASSED</span>
+test_day27.py::<span class="t-green">test_classify_good                PASSED</span>
+test_day27.py::<span class="t-green">test_classify_fair                PASSED</span>
+test_day27.py::<span class="t-green">test_classify_poor                PASSED</span>
+test_day27.py::<span class="t-green">test_classify_boundary_excellent  PASSED</span>
+test_day27.py::<span class="t-green">test_classify_boundary_good       PASSED</span>
+test_day27.py::<span class="t-green">test_rssi_to_percent_min          PASSED</span>
+test_day27.py::<span class="t-green">test_rssi_to_percent_max          PASSED</span>
+test_day27.py::<span class="t-green">test_rssi_to_percent_middle       PASSED</span>
+test_day27.py::<span class="t-green">test_parse_channel_valid          PASSED</span>
+test_day27.py::<span class="t-green">test_parse_channel_invalid_range  PASSED</span>
+test_day27.py::<span class="t-green">test_parse_channel_invalid_type   PASSED</span>
+test_day27.py::<span class="t-yellow">test_live_rssi                    SKIPPED</span>
+test_day27.py::<span class="t-yellow">test_known_broken_feature         XFAIL</span>
+
+<span class="t-dim">================ 12 passed, 1 skipped, 1 xfailed in 0.42s ================</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Write a complete test module for your <code>wlan_utils.py</code> from Day 4:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Create <code>test_wlan_utils.py</code> with at least
+          8 test functions covering: <code>classify_signal()</code> (all 4 categories +
+          2 boundary values), <code>rssi_to_percent()</code> (min, max, mid), and
+          <code>is_5ghz_channel()</code> (channel 6 = False, channel 36 = True).</li>
+        <li><strong>Task 2:</strong> Add a test that asserts a list of RSSI values are
+          ALL correctly classified. Use a list comprehension inside the assertion:
+          <code>assert all(classify_signal(r) != "Unknown" for r in [-42, -58, -67, -81])</code>.</li>
+        <li><strong>Bonus:</strong> Write a test that <em>intentionally fails</em> to see
+          what pytest's output looks like. Study the diff output — then fix it and confirm
+          it passes. Understanding failure output is just as important as writing tests
+          that pass.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> Run <code>pytest test_wlan_utils.py -v --tb=short</code>
+        for concise output, or <code>--tb=long</code> for the full context on failures.
+        Use <code>pytest test_wlan_utils.py -v --co</code> (collect only) to see all
+        discovered tests without running them.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#a371f7; margin-bottom:4px;">
+            Up Next · Day 28
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            WLAN Test Cases with PyTest
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            Basic pytest mastered. Tomorrow you'll write domain-specific WLAN tests:
+            RSSI compliance checks for all APs, rogue AP detection, and
+            non-overlapping channel validation — the kind of tests that run
+            nightly in enterprise WLAN CI pipelines.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

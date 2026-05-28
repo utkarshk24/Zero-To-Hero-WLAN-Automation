@@ -1,0 +1,338 @@
+<!-- ============================================================
+     Day 20: WPA2 Connection Automation
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 20</span>
+      <span class="phase-badge" style="background:rgba(210,153,34,0.15); color:#d29922; border:1px solid rgba(210,153,34,0.3);">
+        Phase 3 · Core Automation
+      </span>
+    </div>
+    <h1>WPA2 Connection Automation —<br>Connect, Verify, and Report</h1>
+    <p>
+      You've scanned, analysed, and classified. Now you connect. Today you'll automate
+      the full WPA2-Personal connection cycle: trigger a connection via nmcli, poll until
+      an IP address is assigned, ping the gateway to confirm reachability, and report
+      pass/fail with timing data — all in one function call.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~55 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>subprocess · time · netifaces</span></div>
+      <div class="hero-stat"><span>🔗</span><span>nmcli · WPA2-Personal</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>The Full Connection Lifecycle</h3>
+      <p>
+        A Wi-Fi connection involves multiple sequential phases: (1) scanning for the SSID,
+        (2) sending a Probe Request, (3) Authentication exchange, (4) Association,
+        (5) 4-Way Handshake (WPA2 key exchange), (6) DHCP Request/Offer, (7) IP assignment.
+        Manually clicking "Connect" collapses all these into one button press. Automated
+        testing needs to verify each phase can complete within acceptable timing thresholds.
+      </p>
+
+      <div class="callout">
+        <strong>nmcli is NetworkManager's command-line interface.</strong><br>
+        On modern Linux systems, NetworkManager handles Wi-Fi connections. Using nmcli
+        from Python gives you a clean API to trigger connections, check connection status,
+        and disconnect — without needing to manage WPA supplicant configuration files
+        directly. It also handles credential storage securely via the system keyring.
+      </div>
+
+      <h3>Polling vs. Event-Driven</h3>
+      <p>
+        After triggering a connection, you don't know exactly when the IP will be assigned.
+        The clean approach is to poll every 500ms, checking for a valid IP address with a
+        reasonable timeout (typically 15–30 seconds). This is preferable to using a fixed
+        <code>time.sleep(5)</code> — polling gives you accurate timing and fails fast if
+        the connection is refused immediately.
+      </p>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — connect_wpa2(), wait_for_ip(), test_connection()</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>Day20_connect_wpa2.py</code>. These three functions form the
+        core connection automation layer used throughout Phase 3.
+      </p>
+
+      <div class="step-label">Block 1 — connect_wpa2() via nmcli</div>
+      <p>
+        nmcli's <code>dev wifi connect</code> command handles the full connection
+        sequence. The <code>--wait 0</code> flag makes it non-blocking — it triggers
+        the connection and returns immediately so we can monitor progress ourselves.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day20_connect_wpa2.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 20: WPA2 Connection Automation
+# =============================================================
+
+import subprocess
+import time
+import re
+import netifaces   # pip install netifaces
+
+def connect_wpa2(ssid, password, interface="wlan0", timeout=30):
+    """
+    Connect to a WPA2-Personal network using nmcli.
+    Uses --wait 0 so we can poll for IP assignment ourselves.
+
+    Returns: (success: bool, message: str)
+    """
+    print(f"[→] Connecting to '{ssid}' on {interface}...")
+
+    # First, ensure we're disconnected from any current network
+    subprocess.run(["nmcli", "dev", "disconnect", interface],
+                   capture_output=True)
+
+    # Trigger the connection — nmcli handles the 4-way handshake
+    result = subprocess.run(
+        ["nmcli", "--wait", str(timeout), "dev", "wifi", "connect",
+         ssid, "password", password, "ifname", interface],
+        capture_output=True, text=True, timeout=timeout + 5
+    )
+
+    if result.returncode == 0:
+        return True, f"Connected to '{ssid}'"
+    else:
+        # Extract the meaningful part of nmcli's error message
+        error = result.stderr.strip() or result.stdout.strip()
+        return False, f"Connection failed: {error}"
+
+# Example (replace with real credentials):
+# ok, msg = connect_wpa2("CorpWifi-5G", "supersecret123")
+# print(f"Connect: {ok} — {msg}")</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — wait_for_ip() with Polling</div>
+      <p>
+        After triggering a connection, we poll for an IP address using <code>netifaces</code>.
+        The function returns the IP and elapsed time, giving you association timing data
+        for your test reports.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def wait_for_ip(interface="wlan0", timeout=15, poll_interval=0.5):
+    """
+    Poll until the interface has a valid (non-APIPA) IPv4 address.
+    APIPA addresses (169.254.x.x) indicate DHCP failure.
+
+    Returns: (ip_address: str or None, elapsed_seconds: float)
+    """
+    start    = time.time()
+    deadline = start + timeout
+
+    while time.time() &lt; deadline:
+        try:
+            addrs = netifaces.ifaddresses(interface)
+            ipv4  = addrs.get(netifaces.AF_INET, [{}])
+            ip    = ipv4[0].get("addr", "")
+
+            # Valid IP = assigned and not APIPA (169.254.x.x)
+            if ip and not ip.startswith("169.254."):
+                elapsed = round(time.time() - start, 2)
+                return ip, elapsed
+
+        except (ValueError, KeyError):
+            pass   # Interface may not exist yet — keep polling
+
+        time.sleep(poll_interval)
+
+    elapsed = round(time.time() - start, 2)
+    return None, elapsed
+
+# ip, elapsed = wait_for_ip("wlan0", timeout=20)
+# print(f"IP: {ip}  ({elapsed}s)")</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — test_connection() Full Cycle</div>
+      <p>
+        The complete test function: connect, wait for IP, ping the gateway. Returns a
+        structured result dict that your pytest test cases can assert against.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def get_gateway(interface="wlan0"):
+    """Get the default gateway IP for the given interface."""
+    result = subprocess.run(["ip", "route", "show", "dev", interface],
+                            capture_output=True, text=True)
+    m = re.search(r"default via ([\d.]+)", result.stdout)
+    return m.group(1) if m else None
+
+def ping_host(host, count=3, timeout=5):
+    """
+    Ping a host and return (success: bool, avg_rtt_ms: float or None).
+    """
+    result = subprocess.run(
+        ["ping", "-c", str(count), "-W", str(timeout), host],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        return False, None
+
+    # Parse average RTT from 'rtt min/avg/max/mdev = X/Y/Z/W ms'
+    m = re.search(r"min/avg/max/mdev = [\d.]+/([\d.]+)/", result.stdout)
+    avg_rtt = float(m.group(1)) if m else None
+    return True, avg_rtt
+
+def test_connection(ssid, password, interface="wlan0"):
+    """
+    Full WPA2 connection test: connect → wait for IP → ping gateway.
+    Returns a complete result dict suitable for pytest assertions.
+    """
+    result = {
+        "ssid": ssid, "interface": interface,
+        "connected": False, "ip": None, "ip_time_s": None,
+        "gateway": None, "ping_ok": False, "ping_rtt_ms": None,
+        "overall": "FAIL"
+    }
+
+    # Step 1: Connect
+    ok, msg = connect_wpa2(ssid, password, interface)
+    if not ok:
+        result["error"] = msg
+        return result
+    result["connected"] = True
+
+    # Step 2: Wait for IP
+    ip, ip_time = wait_for_ip(interface, timeout=20)
+    result["ip"], result["ip_time_s"] = ip, ip_time
+    if not ip:
+        result["error"] = "DHCP timeout — no IP assigned"
+        return result
+
+    # Step 3: Ping gateway
+    gw = get_gateway(interface)
+    result["gateway"] = gw
+    if gw:
+        ping_ok, rtt = ping_host(gw)
+        result["ping_ok"], result["ping_rtt_ms"] = ping_ok, rtt
+
+    result["overall"] = "PASS" if result["ping_ok"] else "FAIL"
+    return result</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>A successful connection test shows all three phases passing with timing data.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ python Day20_connect_wpa2.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-dim">[→] Connecting to 'CorpWifi-5G' on wlan0...</span>
+<span class="t-green">[✓] Connected to 'CorpWifi-5G'</span>
+<span class="t-blue">[IP] 192.168.1.42 assigned in 3.21s</span>
+<span class="t-blue">[GW] Gateway: 192.168.1.1</span>
+<span class="t-green">[Ping] 192.168.1.1 → OK, avg RTT: 2.4 ms</span>
+
+<span class="t-green">{'ssid': 'CorpWifi-5G', 'connected': True,
+ 'ip': '192.168.1.42', 'ip_time_s': 3.21,
+ 'gateway': '192.168.1.1', 'ping_ok': True,
+ 'ping_rtt_ms': 2.4, 'overall': 'PASS'}</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Build a multi-SSID connection test runner:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Write <code>test_multiple_ssids(ssid_list)</code>
+          that iterates over a list of <code>(ssid, password)</code> tuples, calls
+          <code>test_connection()</code> for each, and accumulates results into a list.
+          After all tests, print a summary table with pass/fail and timing for each SSID.</li>
+        <li><strong>Task 2:</strong> Add a <code>disconnect(interface)</code> function
+          that calls <code>nmcli dev disconnect</code> and verify the IP is released
+          (polling until <code>wait_for_ip()</code> returns None) before connecting
+          to the next SSID.</li>
+        <li><strong>Bonus:</strong> Add RSSI measurement right after IP assignment —
+          call <code>get_current_connection()</code> from Day 10 to get the connected
+          AP's RSSI and include it in the result dict. Flag connections where RSSI
+          is below -75 dBm as marginal quality.
+        </li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> To verify disconnection, check that
+        <code>netifaces.ifaddresses("wlan0").get(netifaces.AF_INET)</code> returns
+        <code>None</code> or an empty list. Poll this with a short timeout (5s) after
+        disconnecting before moving to the next test.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#d29922; margin-bottom:4px;">
+            Up Next · Day 21
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            WPA3 &amp; SAE: Modern Security Automation
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            WPA2 is mastered. Tomorrow you tackle WPA3 — SAE authentication,
+            transition mode detection, and verifying that Protected Management
+            Frames are active on your connection.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

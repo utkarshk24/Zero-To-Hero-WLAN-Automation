@@ -1,0 +1,370 @@
+<!-- ============================================================
+     Day 5: pip, Virtual Environments & requirements.txt
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 05</span>
+      <span class="phase-badge" style="background:rgba(88,166,255,0.15); color:#58a6ff; border:1px solid rgba(88,166,255,0.3);">
+        Phase 1 · Fundamentals
+      </span>
+    </div>
+    <h1>pip, Virtual Environments —<br>&amp; the Library Ecosystem</h1>
+    <p>
+      Your scripts work on your machine — but do they work on your colleague's? Today you'll
+      master virtual environments and <code>requirements.txt</code>, the tools that make Python
+      projects portable, reproducible, and ready for professional automation pipelines.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~45 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>venv · pip · netifaces</span></div>
+      <div class="hero-stat"><span>🔒</span><span>Isolated environments</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>The "Works on My Machine" Problem</h3>
+      <p>
+        You write a great WLAN automation script. It imports <code>scapy</code>,
+        <code>netifaces</code>, and <code>paramiko</code>. You hand it to a colleague.
+        They run it and immediately see: <code>ModuleNotFoundError: No module named 'scapy'</code>.
+        You spend 30 minutes figuring out which version of which library they need.
+        This is the most common friction point in shared Python projects — and it is entirely
+        preventable.
+      </p>
+
+      <div class="callout">
+        <strong>A virtual environment is a self-contained Python sandbox.</strong><br>
+        Every project gets its own isolated set of installed packages with pinned version numbers.
+        You share the <code>requirements.txt</code> file, and anyone can recreate your exact
+        environment with one command.
+      </div>
+
+      <h3>Global vs. Isolated Installs</h3>
+      <p>
+        When you install a package globally (<code>pip install scapy</code> without activating
+        a venv), it lands in the system Python's shared folder. Project A needs
+        <code>scapy==2.4.5</code> while Project B needs <code>scapy==2.5.0</code>. They can't
+        coexist globally. Virtual environments solve this by giving each project its own
+        completely separate package directory. Activate the venv, and Python reads packages
+        only from that folder — everything else is invisible.
+      </p>
+
+      <h3>The pip Ecosystem</h3>
+      <p>
+        <strong>pip</strong> (Pip Installs Packages) is Python's built-in package manager.
+        It downloads packages from <strong>PyPI</strong> (the Python Package Index) —
+        over 500,000 open-source libraries covering everything from HTTP clients to hardware
+        drivers to ML frameworks. For WLAN automation, we rely on packages like Scapy,
+        netifaces, dnspython, and pytest — all installed via pip in seconds.
+      </p>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — Mastering venv &amp; pip</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Follow these blocks in order. By the end you'll have a proper project environment
+        and a script (<code>Day05_env_check.py</code>) that verifies every required package
+        is installed and reports its version — a pattern used in real CI pipelines.
+      </p>
+
+      <div class="step-label">Block 1 — Creating and Activating a Virtual Environment</div>
+      <p>
+        The <code>venv</code> module is built into Python 3.3+ — no installation needed.
+        It copies a minimal Python interpreter into a local <code>venv/</code> folder so
+        your project becomes completely self-contained.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Bash</span>
+          <span class="code-block-filename">Terminal</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-bash"># Navigate to your project folder
+cd wlan-automation-course
+
+# Create the virtual environment (creates a 'venv/' folder)
+python3 -m venv venv
+
+# Activate it — your prompt changes to (venv) to confirm
+# macOS / Linux:
+source venv/bin/activate
+
+# Windows PowerShell:
+.\venv\Scripts\Activate.ps1
+
+# Confirm you're using the venv Python (not system Python)
+which python          # macOS/Linux → should point inside venv/bin/
+python --version</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — Installing Packages with pip</div>
+      <p>
+        With the venv active, <code>pip install</code> puts packages only inside the venv
+        folder. The <code>==</code> syntax pins an exact version — critical for reproducibility
+        in CI pipelines and shared test environments.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Bash</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-bash"># Always upgrade pip first — older versions miss security fixes
+pip install --upgrade pip
+
+# Install our core course libraries
+pip install netifaces psutil
+
+# Install with a minimum version constraint
+pip install "requests>=2.28"
+
+# Install with an exact version pin (best for CI reproducibility)
+pip install "netifaces==0.11.0"
+
+# Inspect a package's metadata
+pip show netifaces</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — Freezing to requirements.txt</div>
+      <p>
+        <code>pip freeze</code> prints every installed package with its exact version.
+        Redirecting that output to <code>requirements.txt</code> captures a complete
+        environment snapshot. Anyone can replicate it exactly with <code>pip install -r</code>.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Bash</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-bash"># Capture the current environment
+pip freeze > requirements.txt
+
+# View the file — every package is pinned to an exact version
+cat requirements.txt
+# netifaces==0.11.0
+# psutil==5.9.5
+# requests==2.31.0
+
+# Recreate the exact same environment on another machine:
+pip install -r requirements.txt</code></pre>
+      </div>
+
+      <div class="step-label">Block 4 — The env_check.py Preflight Script</div>
+      <p>
+        Create <code>Day05_env_check.py</code>. This script validates your environment
+        before running any automation. Catching missing packages early with a clear error
+        is far better than a confusing traceback deep inside your test suite.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day05_env_check.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 5: Environment Verification (Preflight Check)
+# Purpose: Confirm all required packages are installed before
+#          running any automation — catches problems early.
+# =============================================================
+
+import sys
+import importlib.metadata   # Built-in: reads installed wheel metadata
+
+# Map import names → PyPI package names
+# (They sometimes differ, e.g. 'cv2' package is 'opencv-python')
+REQUIRED_PACKAGES = {
+    "netifaces": "netifaces",
+    "psutil":    "psutil",
+}
+
+def check_python_version(min_major=3, min_minor=9):
+    """Verify Python version meets the course minimum."""
+    major = sys.version_info.major
+    minor = sys.version_info.minor
+    ok = (major, minor) >= (min_major, min_minor)
+    status = "✓" if ok else "✗ FAIL"
+    print(f"  [{status}] Python {major}.{minor}  (need {min_major}.{min_minor}+)")
+    return ok
+
+def check_package(import_name, pypi_name):
+    """
+    Try to read an installed package's version metadata.
+    Returns True if found, False if missing.
+    """
+    try:
+        # importlib.metadata.version() reads the installed wheel metadata file
+        version = importlib.metadata.version(pypi_name)
+        print(f"  [✓] {import_name:15s}  version {version}")
+        return True
+    except importlib.metadata.PackageNotFoundError:
+        print(f"  [✗] {import_name:15s}  NOT INSTALLED")
+        print(f"      → Fix: pip install {pypi_name}")
+        return False
+
+def main():
+    print("=" * 50)
+    print("  WLAN Automation — Environment Preflight Check")
+    print("=" * 50)
+
+    all_ok = True
+
+    # Check Python version first — wrong version breaks everything
+    print("\n[Python Version]")
+    if not check_python_version():
+        all_ok = False
+
+    # Check each required package
+    print("\n[Required Packages]")
+    for import_name, pypi_name in REQUIRED_PACKAGES.items():
+        if not check_package(import_name, pypi_name):
+            all_ok = False
+
+    print("\n" + "=" * 50)
+    if all_ok:
+        print("  ✓ All checks passed — environment is ready!")
+    else:
+        print("  ✗ Some checks FAILED — fix the issues above.")
+        sys.exit(1)   # Non-zero exit code signals failure to CI pipelines
+    print("=" * 50)
+
+if __name__ == "__main__":
+    main()</code></pre>
+      </div>
+
+      <div class="step-label">Block 5 — Deactivating and Recreating from Scratch</div>
+      <p>
+        Knowing how to cleanly destroy and recreate a venv is the CI workflow.
+        Every GitHub Actions pipeline run starts with a fresh environment and rebuilds
+        from <code>requirements.txt</code> to ensure tests never rely on stale state.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Bash</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-bash"># Leave the virtual environment (back to system Python)
+deactivate
+
+# Safely delete just the venv folder — your code files are untouched
+rm -rf venv
+
+# Rebuild from requirements.txt (what CI does on every run)
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# Run the preflight check to confirm everything is correct
+python Day05_env_check.py</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>When all packages are installed correctly, the preflight check should look like this.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ python Day05_env_check.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-dim">==================================================</span>
+<span class="t-bold">  WLAN Automation — Environment Preflight Check</span>
+<span class="t-dim">==================================================</span>
+
+<span class="t-dim">[Python Version]</span>
+  [<span class="t-green">✓</span>] Python 3.11  (need 3.9+)
+
+<span class="t-dim">[Required Packages]</span>
+  [<span class="t-green">✓</span>] netifaces        version 0.11.0
+  [<span class="t-green">✓</span>] psutil           version 5.9.5
+
+<span class="t-dim">==================================================</span>
+<span class="t-green">  ✓ All checks passed — environment is ready!</span>
+<span class="t-dim">==================================================</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Extend <code>Day05_env_check.py</code> into a full project bootstrap validator:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Add <code>dnspython</code> and <code>requests</code>
+          to the <code>REQUIRED_PACKAGES</code> dict, install them, and verify they appear
+          in the preflight output with correct version numbers.</li>
+        <li><strong>Task 2:</strong> Add a <code>check_internet()</code> function that
+          uses <code>requests.get("https://pypi.org", timeout=5)</code> to confirm internet
+          access, printing a pass/fail result alongside the package checks.</li>
+        <li><strong>Bonus:</strong> Read <code>requirements.txt</code> programmatically
+          and compare it against live <code>pip freeze</code> output to detect version drift —
+          where an installed version differs from the pinned version in the file.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> Use <code>subprocess.run(["pip", "freeze"], capture_output=True,
+        text=True)</code> to get the live freeze output as a string, then parse it with
+        <code>dict(line.split("==") for line in output.splitlines() if "==" in line)</code>.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#58a6ff; margin-bottom:4px;">
+            Up Next · Day 6
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            File I/O: Reading &amp; Writing Test Logs
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            Every test run should leave evidence. Tomorrow you'll read config files,
+            write timestamped log files, and export test results to CSV — the bread and
+            butter of every real-world automation report.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

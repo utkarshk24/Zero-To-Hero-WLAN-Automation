@@ -1,0 +1,345 @@
+<!-- ============================================================
+     Day 24: RSSI Monitoring & Logging
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 24</span>
+      <span class="phase-badge" style="background:rgba(210,153,34,0.15); color:#d29922; border:1px solid rgba(210,153,34,0.3);">
+        Phase 3 · Core Automation
+      </span>
+    </div>
+    <h1>RSSI Monitoring —<br>Continuous Signal Strength Logging</h1>
+    <p>
+      A single RSSI reading tells you how strong the signal is right now. Continuous
+      monitoring tells you when it drops, how long it stays low, and whether it's
+      trending downward over time. Today you'll build a rolling-average RSSI monitor
+      with configurable alerts, CSV logging, and a drop-detection function for
+      roaming trigger analysis.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~50 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>subprocess · csv · collections</span></div>
+      <div class="hero-stat"><span>📊</span><span>Rolling average · Alerts</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>Why Continuous Monitoring Matters</h3>
+      <p>
+        RSSI is highly variable — it can swing ±10 dBm within a second due to multipath
+        fading, interference, and transmit power fluctuations. A single snapshot is
+        unreliable. A rolling average over 5-10 samples gives a stable, meaningful value
+        for test assertions and alert thresholds.
+      </p>
+
+      <div class="callout">
+        <strong>The rolling average is your signal quality truth.</strong><br>
+        Enterprise WLAN testing uses a 5-sample rolling average to trigger roaming:
+        when the average drops below -70 dBm, the client should roam to a stronger AP.
+        Your automated test can verify this behavior by monitoring RSSI while
+        physically moving the test device (or attenuating the signal programmatically).
+      </div>
+
+      <h3>RSSI Sources by Platform</h3>
+      <p>
+        On Linux: <code>iw dev wlan0 link</code> provides RSSI in the
+        <code>signal: -XX dBm</code> line. On macOS: <code>airport -I</code> outputs
+        <code>agrCtlRSSI: -XX</code>. On Windows: <code>netsh wlan show interfaces</code>
+        gives Signal as a percentage. Day 10's parser already handles all three —
+        today we call it repeatedly to build a time series.
+      </p>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — get_rssi(), monitor_rssi(), detect_drops()</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>Day24_rssi_monitor.py</code>. The monitor function runs in a loop,
+        reading RSSI every second and writing results to a CSV file.
+      </p>
+
+      <div class="step-label">Block 1 — get_rssi() Cross-Platform</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day24_rssi_monitor.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 24: RSSI Monitoring & Continuous Logging
+# =============================================================
+
+import subprocess
+import platform
+import re
+import time
+import csv
+import datetime
+from collections import deque
+from pathlib import Path
+
+def get_rssi(interface="wlan0"):
+    """
+    Read the current RSSI from the connected AP.
+    Returns RSSI in dBm (int) or None if not connected / not readable.
+    """
+    os_name = platform.system()
+
+    if os_name == "Linux":
+        result = subprocess.run(
+            ["iw", "dev", interface, "link"],
+            capture_output=True, text=True
+        )
+        m = re.search(r"signal:\s*(-\d+) dBm", result.stdout)
+        return int(m.group(1)) if m else None
+
+    elif os_name == "Darwin":
+        airport = ("/System/Library/PrivateFrameworks/Apple80211.framework"
+                   "/Versions/Current/Resources/airport")
+        result = subprocess.run([airport, "-I"], capture_output=True, text=True)
+        m = re.search(r"agrCtlRSSI:\s*(-\d+)", result.stdout)
+        return int(m.group(1)) if m else None
+
+    return None
+
+rssi = get_rssi("wlan0")
+print(f"[RSSI] Current: {rssi} dBm")</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — monitor_rssi() with Rolling Average and Alerts</div>
+      <p>
+        <code>collections.deque(maxlen=5)</code> is a perfect rolling window — it
+        automatically discards the oldest element when full, so the average is always
+        computed over the last N readings without manual management.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def monitor_rssi(interface="wlan0", duration=60, interval=1.0,
+                  alert_threshold=-75, window_size=5,
+                  csv_path=None):
+    """
+    Continuously monitor RSSI for `duration` seconds.
+    Maintains a rolling average over `window_size` samples.
+    Alerts when rolling average drops below `alert_threshold`.
+    Optionally writes all readings to a CSV file.
+
+    Returns: list of (timestamp, rssi, rolling_avg) tuples
+    """
+    window   = deque(maxlen=window_size)
+    readings = []
+    csv_file = None
+    csv_writer = None
+
+    if csv_path:
+        csv_file   = open(csv_path, "w", newline="")
+        csv_writer = csv.writer(csv_file)
+        csv_writer.writerow(["timestamp", "rssi_dbm", "rolling_avg", "alert"])
+
+    try:
+        end_time = time.time() + duration
+        print(f"[Monitor] RSSI on {interface} for {duration}s  "
+              f"(alert &lt; {alert_threshold} dBm, window={window_size})")
+
+        while time.time() &lt; end_time:
+            rssi = get_rssi(interface)
+            ts   = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+
+            if rssi is not None:
+                window.append(rssi)
+                avg   = sum(window) / len(window)
+                alert = avg &lt; alert_threshold
+
+                readings.append((ts, rssi, round(avg, 1)))
+
+                if csv_writer:
+                    csv_writer.writerow([ts, rssi, round(avg, 1), alert])
+
+                bar_len = min(50, max(0, rssi + 100))  # -100→0, 0→100, clamp 0-50
+                bar = "█" * (bar_len // 2) + "░" * (25 - bar_len // 2)
+                alert_str = " ⚠ BELOW THRESHOLD" if alert else ""
+                print(f"  {ts}  {rssi:4d} dBm  avg={avg:5.1f}  [{bar}]{alert_str}")
+
+            time.sleep(interval)
+
+    finally:
+        if csv_file:
+            csv_file.close()
+
+    return readings</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — detect_drops() in Time Series</div>
+      <p>
+        After monitoring, the time series can be analysed for signal drops — periods
+        where RSSI stays below threshold for more than N consecutive seconds.
+        These are candidate roaming events or coverage holes.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def detect_drops(readings, threshold=-75, min_duration_s=3):
+    """
+    Find periods in a RSSI time series where signal stayed below
+    `threshold` for at least `min_duration_s` seconds.
+
+    Args:
+        readings: list of (timestamp, rssi, avg) tuples
+        threshold: alert dBm threshold
+        min_duration_s: minimum consecutive seconds below threshold
+
+    Returns: list of drop events {start, end, duration_s, min_rssi}
+    """
+    drops = []
+    in_drop   = False
+    drop_start = None
+    drop_rssis = []
+
+    for ts, rssi, avg in readings:
+        below = rssi &lt; threshold
+
+        if below and not in_drop:
+            in_drop    = True
+            drop_start = ts
+            drop_rssis = [rssi]
+        elif below and in_drop:
+            drop_rssis.append(rssi)
+        elif not below and in_drop:
+            # Drop ended — check if it lasted long enough
+            duration = len(drop_rssis)  # Each reading = 1 second
+            if duration &gt;= min_duration_s:
+                drops.append({
+                    "start":      drop_start,
+                    "end":        ts,
+                    "duration_s": duration,
+                    "min_rssi":   min(drop_rssis),
+                    "avg_rssi":   round(sum(drop_rssis)/len(drop_rssis), 1),
+                })
+            in_drop = False
+
+    return drops
+
+# Run for 30 seconds and analyse drops
+csv_out  = Path("rssi_log.csv")
+readings = monitor_rssi("wlan0", duration=30, alert_threshold=-75, csv_path=csv_out)
+drops    = detect_drops(readings, threshold=-75, min_duration_s=3)
+print(f"\n[Drops] {len(drops)} drop events found:")
+for d in drops:
+    print(f"  {d['start']} → {d['end']}  {d['duration_s']}s  min={d['min_rssi']} dBm")</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>The monitor displays a live ASCII bar chart of RSSI and alerts on threshold violations.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ python Day24_rssi_monitor.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-dim">[Monitor] RSSI on wlan0 for 30s  (alert &lt; -75 dBm, window=5)</span>
+  09:00:01  <span class="t-green">-54</span> dBm  avg= -54.0  [<span class="t-green">███████████████████████░░</span>]
+  09:00:02  <span class="t-green">-56</span> dBm  avg= -55.0  [<span class="t-green">██████████████████████░░░</span>]
+  09:00:03  <span class="t-blue">-61</span> dBm  avg= -57.0  [<span class="t-blue">█████████████████████░░░░</span>]
+  09:00:04  <span class="t-yellow">-72</span> dBm  avg= -60.8  [<span class="t-yellow">████████████████████░░░░░</span>]
+  09:00:05  <span class="t-red">-78</span> dBm  avg= -64.2  [<span class="t-red">███████████████████░░░░░░</span>] <span class="t-red">⚠ BELOW THRESHOLD</span>
+
+<span class="t-dim">[Drops] 1 drop event found:</span>
+  09:00:05 → 09:00:09  5s  min=-81 dBm</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Extend the RSSI monitor with trend analysis and roaming prediction:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Add a <code>compute_trend(readings, window=10)</code>
+          function that uses linear regression (or simply computes the slope of the last
+          N RSSI readings using <code>(readings[-1] - readings[-N]) / N</code>) to detect
+          a negative trend. If RSSI is dropping at more than 2 dBm/second, print a
+          "ROAMING LIKELY" warning.</li>
+        <li><strong>Task 2:</strong> Write a <code>plot_ascii_chart(readings)</code>
+          function that prints a fixed-width ASCII RSSI chart at the end of a monitoring
+          session — time on the X axis, dBm on the Y axis. Use a grid of characters
+          where each row is a 5-dBm band.</li>
+        <li><strong>Bonus:</strong> Save a separate CSV file that summarises each 10-second
+          window: min, max, avg, stdev RSSI. Use <code>statistics.stdev()</code> for
+          standard deviation — high stdev indicates an unstable signal that may cause
+          retransmissions.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> For ASCII chart Y-axis range: set
+        <code>y_min = -100, y_max = -20</code> and map RSSI to a row index:
+        <code>row = int((rssi - y_min) / (y_max - y_min) * height)</code>.
+        Build a 2D grid of spaces, then set each (time, row) cell to a block character.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#d29922; margin-bottom:4px;">
+            Up Next · Day 25
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Association Timing Measurement
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            You can measure RSSI over time — but how long does association actually take?
+            Tomorrow you'll build an <code>AssociationTimer</code> class that measures
+            each phase of the connection process: probe, authentication, association,
+            4-way handshake, and DHCP.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

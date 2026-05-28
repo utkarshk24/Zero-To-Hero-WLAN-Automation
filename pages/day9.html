@@ -1,0 +1,328 @@
+<!-- ============================================================
+     Day 9: subprocess — Running OS Commands from Python
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 09</span>
+      <span class="phase-badge" style="background:rgba(63,185,80,0.15); color:#3fb950; border:1px solid rgba(63,185,80,0.3);">
+        Phase 2 · OS &amp; Interfaces
+      </span>
+    </div>
+    <h1>subprocess —<br>Running OS Commands from Python</h1>
+    <p>
+      The OS already has powerful tools for querying Wi-Fi — <code>iwconfig</code>,
+      <code>airport</code>, <code>netsh</code>. Today you'll learn to run any command
+      from Python, capture its output as a clean string, handle errors gracefully, and
+      build a cross-platform Wi-Fi query layer that works on Linux, macOS, and Windows.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~50 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>subprocess · platform</span></div>
+      <div class="hero-stat"><span>💻</span><span>Linux · macOS · Windows</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>Python Can't Do Everything — But the OS Can</h3>
+      <p>
+        Python is excellent at logic, data manipulation, and reporting. But some things are
+        only exposed via OS-level tools: scanning Wi-Fi, reading interface statistics, setting
+        channels, enabling monitor mode. The <code>subprocess</code> module is Python's bridge
+        to those tools — it spawns a child process, runs any command, captures stdout/stderr,
+        and returns the exit code.
+      </p>
+
+      <div class="callout">
+        <strong>subprocess.run() is the modern, safe way to call external commands.</strong><br>
+        It replaces the older <code>os.system()</code> (which can't capture output) and
+        <code>subprocess.Popen()</code> (which is more complex than needed for most cases).
+        Use <code>capture_output=True</code> and <code>text=True</code> — you'll use these
+        on almost every subprocess call in this course.
+      </div>
+
+      <h3>Cross-Platform Wi-Fi Tools</h3>
+      <p>
+        The same Python script needs to work on Linux (where you use <code>iwconfig</code>
+        or <code>nmcli</code>), macOS (where you use <code>airport</code>), and Windows
+        (where you use <code>netsh wlan</code>). A clean <em>command selector</em> function
+        that detects the OS and picks the right command is the foundation of every
+        cross-platform WLAN automation tool.
+      </p>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — subprocess &amp; Cross-Platform Commands</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>Day09_subprocess.py</code>. Each block builds toward a
+        cross-platform Wi-Fi query function with proper error handling.
+      </p>
+
+      <div class="step-label">Block 1 — subprocess.run() Basics</div>
+      <p>
+        <code>subprocess.run()</code> is a blocking call — Python waits until the command
+        finishes. <code>capture_output=True</code> redirects stdout and stderr into Python
+        string attributes. <code>text=True</code> decodes the bytes to a Python string
+        automatically using the system's default encoding.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day09_subprocess.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 9: subprocess — Running OS commands from Python
+# =============================================================
+
+import subprocess
+import platform
+
+# ── Block 1: Basic subprocess.run() ─────────────────────────
+
+result = subprocess.run(
+    ["ping", "-c", "1", "8.8.8.8"],   # Command as a list (safer than a string)
+    capture_output=True,               # Capture stdout + stderr
+    text=True,                         # Decode bytes → str automatically
+    timeout=10                         # Kill if it hangs > 10 seconds
+)
+
+print(f"Return code : {result.returncode}")   # 0 = success, non-zero = failure
+print(f"Stdout:\n{result.stdout}")
+if result.stderr:
+    print(f"Stderr:\n{result.stderr}")</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — Cross-Platform Command Selector</div>
+      <p>
+        <code>platform.system()</code> returns <code>"Linux"</code>, <code>"Darwin"</code>
+        (macOS), or <code>"Windows"</code>. Use this to pick the right Wi-Fi scanning
+        command at runtime. The same Python logic runs everywhere — only the OS command
+        changes.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># ── Block 2: Cross-platform command selector ─────────────────
+
+def get_wifi_scan_command():
+    """
+    Return the correct Wi-Fi scan command for this OS.
+    Returns a list ready for subprocess.run().
+    Raises RuntimeError if the OS is not supported.
+    """
+    os_name = platform.system()
+
+    if os_name == "Linux":
+        # nmcli is more reliable than iwlist on modern Linux
+        return ["nmcli", "-t", "-f", "SSID,BSSID,SIGNAL,CHAN,SECURITY",
+                "dev", "wifi", "list"]
+
+    elif os_name == "Darwin":  # macOS
+        # airport is Apple's built-in Wi-Fi diagnostic tool
+        return ["/System/Library/PrivateFrameworks/Apple80211.framework"
+                "/Versions/Current/Resources/airport", "-s"]
+
+    elif os_name == "Windows":
+        return ["netsh", "wlan", "show", "networks", "mode=bssid"]
+
+    else:
+        raise RuntimeError(f"Unsupported OS: {os_name}")
+
+cmd = get_wifi_scan_command()
+print(f"\n[OS: {platform.system()}] Scan command: {' '.join(cmd)}")</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — nmcli Wi-Fi List Parser</div>
+      <p>
+        Raw command output is just a string. The real automation value comes from
+        parsing that string into structured Python data. On Linux, <code>nmcli -t</code>
+        (terse mode) uses colon-separated fields — easy to split.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># ── Block 3: nmcli output parser (Linux) ─────────────────────
+
+def nmcli_wifi_list():
+    """
+    Run nmcli and parse its terse output into a list of AP dicts.
+    nmcli -t output format: SSID:BSSID:SIGNAL:CHAN:SECURITY
+    """
+    result = subprocess.run(
+        ["nmcli", "-t", "-f", "SSID,BSSID,SIGNAL,CHAN,SECURITY",
+         "dev", "wifi", "list"],
+        capture_output=True, text=True, timeout=15
+    )
+
+    if result.returncode != 0:
+        print(f"[ERROR] nmcli failed: {result.stderr.strip()}")
+        return []
+
+    aps = []
+    for line in result.stdout.strip().splitlines():
+        parts = line.split(":")
+        if len(parts) &gt;= 5:
+            aps.append({
+                "ssid":     parts[0],
+                "bssid":    ":".join(parts[1:7]),   # BSSID contains colons itself
+                "signal":   int(parts[7]) if parts[7].isdigit() else 0,
+                "channel":  int(parts[8]) if parts[8].isdigit() else 0,
+                "security": parts[9] if len(parts) &gt; 9 else "Unknown"
+            })
+    return aps</code></pre>
+      </div>
+
+      <div class="step-label">Block 4 — safe_run() Error Handling Wrapper</div>
+      <p>
+        In production automation, commands can fail. The adapter might not be in the right
+        mode, a tool might not be installed, or a timeout can occur. A <code>safe_run()</code>
+        wrapper handles all these cases and returns a consistent result object — never crashes
+        your test suite with an unhandled exception.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># ── Block 4: safe_run() — production error handling ──────────
+
+def safe_run(cmd, timeout=30):
+    """
+    Run a command safely, catching all possible exceptions.
+    Returns: (success: bool, stdout: str, stderr: str, returncode: int)
+    """
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout
+        )
+        return result.returncode == 0, result.stdout, result.stderr, result.returncode
+
+    except subprocess.TimeoutExpired:
+        return False, "", f"Command timed out after {timeout}s", -1
+
+    except FileNotFoundError:
+        return False, "", f"Command not found: {cmd[0]}", -2
+
+    except PermissionError:
+        return False, "", f"Permission denied: try running with sudo", -3
+
+# Example usage
+ok, out, err, code = safe_run(["iwconfig"], timeout=5)
+if ok:
+    print(f"[iwconfig OK] {len(out.splitlines())} lines of output")
+else:
+    print(f"[iwconfig FAIL] {err}")</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>Output varies by OS. On Linux with nmcli available, you'll see something like this.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ python Day09_subprocess.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre>Return code : 0
+Stdout:
+<span class="t-green">PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
+64 bytes from 8.8.8.8: icmp_seq=1 ttl=118 time=12.4 ms</span>
+
+<span class="t-dim">[OS: Linux] Scan command: nmcli -t -f SSID,BSSID,SIGNAL,CHAN,SECURITY dev wifi list</span>
+
+<span class="t-blue">[iwconfig OK] 12 lines of output</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Build a cross-platform Wi-Fi info function using what you've learned:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Write a <code>get_connected_ssid()</code> function
+          that returns the currently connected SSID on your OS. Use
+          <code>nmcli -t -f ACTIVE,SSID dev wifi</code> on Linux,
+          <code>airport -I</code> on macOS, or <code>netsh wlan show interfaces</code>
+          on Windows. Return <code>None</code> if not connected.</li>
+        <li><strong>Task 2:</strong> Add a <code>ping_gateway()</code> function that
+          finds the default gateway IP (using <code>ip route show default</code> on Linux),
+          then pings it twice with <code>subprocess.run()</code> and returns the
+          average round-trip time in milliseconds.</li>
+        <li><strong>Bonus:</strong> Add a <code>retry</code> parameter to
+          <code>safe_run()</code> that re-tries the command up to N times on failure
+          before giving up, with a 1-second delay between attempts.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> Parse ping RTT from the output line
+        <code>"rtt min/avg/max/mdev = 10.2/12.4/14.6/1.8 ms"</code> using
+        <code>line.split("=")[1].split("/")[1]</code> to extract the average.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#3fb950; margin-bottom:4px;">
+            Up Next · Day 10
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Parsing iwconfig &amp; netsh Output with Regex
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            You can run <code>iwconfig</code> — but the output is a messy multi-line string.
+            Tomorrow you'll use Python's <code>re</code> module with named capture groups
+            to extract SSID, RSSI, and channel from raw command output in one line of code.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

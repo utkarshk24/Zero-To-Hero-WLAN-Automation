@@ -1,0 +1,329 @@
+<!-- ============================================================
+     Day 33: Phase 4 Capstone — Full Test Suite
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 33</span>
+      <span class="phase-badge" style="background:rgba(163,113,247,0.15); color:#a371f7; border:1px solid rgba(163,113,247,0.3);">
+        Phase 4 · Test Frameworks
+      </span>
+    </div>
+    <h1>Phase 4 Capstone —<br>The Full Professional Test Suite</h1>
+    <p>
+      Today you assemble a production-grade test suite: multiple test files organised by
+      feature, a central <code>conftest.py</code> with session fixtures, a
+      <code>pytest.ini</code> configured for both HTML and Allure reporters, and smoke/
+      integration mark separation so you can run quick CI gates or full regression runs
+      with a single flag change.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~90 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>pytest · pytest-html · allure-pytest</span></div>
+      <div class="hero-stat"><span>🏆</span><span>Capstone Project</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — What This Capstone Builds</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>Professional Test Suite Structure</h3>
+      <p>
+        A flat folder of test files doesn't scale. When you have 50+ tests, you need
+        structure: tests grouped by feature, shared fixtures in conftest.py, a central
+        configuration in pytest.ini, and mark-based test selection for different contexts
+        (smoke tests in 30 seconds, full regression in 10 minutes).
+      </p>
+
+      <div class="callout">
+        <strong>The directory structure is the architecture.</strong><br>
+        <code>tests/</code> ── <code>test_rssi.py</code>, <code>test_security.py</code>,
+        <code>test_channels.py</code>, <code>test_connectivity.py</code>,
+        <code>conftest.py</code>, <code>pytest.ini</code>.
+        This structure tells every engineer where to find what, and tells pytest
+        exactly how to discover, configure, and report tests.
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — Multi-File Structure, conftest.py, pytest.ini</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create the full test suite directory structure shown below.
+      </p>
+
+      <div class="step-label">Block 1 — Directory Structure</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Bash</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-bash">wlan-automation-course/
+├── tests/
+│   ├── conftest.py          # Shared fixtures (session scope)
+│   ├── pytest.ini           # pytest configuration
+│   ├── test_rssi.py         # RSSI compliance tests
+│   ├── test_security.py     # WPA2/3 security tests
+│   ├── test_channels.py     # Channel planning tests
+│   └── test_connectivity.py # End-to-end connectivity tests
+├── ap_inventory.json
+├── test_config.yaml
+└── requirements.txt</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — pytest.ini Configuration</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Bash</span>
+          <span class="code-block-filename">tests/pytest.ini</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-bash">[pytest]
+# Automatically pass these flags on every pytest run
+addopts =
+    -v
+    --tb=short
+    --html=../reports/latest_report.html
+    --self-contained-html
+    --alluredir=../allure-results
+
+# Test discovery
+testpaths = .
+
+# Custom marks — register to avoid warnings
+markers =
+    smoke: Quick smoke tests (run in &lt;60s, no hardware needed)
+    integration: Full integration tests (require live AP)
+    slow: Long-running tests (skip in fast CI)
+    rssi: RSSI-related tests
+    security: Security compliance tests
+    channels: Channel planning tests
+
+# Minimum pytest version required
+minversion = 7.0</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — Comprehensive conftest.py</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">tests/conftest.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># tests/conftest.py — Session fixtures and hooks for the full suite
+
+import pytest
+import json
+import yaml
+import datetime
+from pathlib import Path
+
+def pytest_configure(config):
+    """Add custom metadata to HTML report header."""
+    config._metadata = getattr(config, "_metadata", {})
+    config._metadata["Test Suite"] = "WLAN Automation Capstone"
+    config._metadata["Timestamp"]  = datetime.datetime.now().isoformat()
+
+@pytest.fixture(scope="session")
+def ap_inventory():
+    """Load AP inventory. Skip session if file is missing."""
+    path = Path("../ap_inventory.json")
+    if not path.exists():
+        pytest.skip("ap_inventory.json not found")
+    return json.loads(path.read_text())
+
+@pytest.fixture(scope="session")
+def wlan_config():
+    """Load YAML test thresholds."""
+    path = Path("../test_config.yaml")
+    if not path.exists():
+        return {"thresholds": {"min_rssi_dbm": -75}}
+    return yaml.safe_load(path.read_text())
+
+@pytest.fixture(scope="session")
+def scan_data():
+    """
+    Return scan data. In CI/hardware tests, replace with real scan.
+    Marked as session scope so scan runs once per pytest invocation.
+    """
+    return [
+        {"ssid": "CorpWifi-5G", "bssid": "AA:BB:CC:01:02:03",
+         "rssi": -52, "channel": 36, "security": "WPA2"},
+        {"ssid": "CorpWifi-2G", "bssid": "AA:BB:CC:01:02:04",
+         "rssi": -61, "channel": 6,  "security": "WPA2"},
+        {"ssid": "GuestWifi",   "bssid": "AA:BB:CC:01:02:05",
+         "rssi": -70, "channel": 11, "security": "WPA2"},
+    ]</code></pre>
+      </div>
+
+      <div class="step-label">Block 4 — Sample Test Files with Marks</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">tests/test_rssi.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># tests/test_rssi.py
+import pytest
+import allure
+
+@allure.feature("RSSI Compliance")
+class TestRSSICompliance:
+
+    @pytest.mark.smoke
+    @pytest.mark.rssi
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_all_aps_above_threshold(self, scan_data, wlan_config):
+        """SMOKE: All APs must meet minimum RSSI threshold."""
+        threshold = wlan_config["thresholds"]["min_rssi_dbm"]
+        failing = [ap for ap in scan_data if ap["rssi"] &lt; threshold]
+        assert len(failing) == 0, (
+            f"APs below {threshold} dBm: "
+            + ", ".join(f"{a['ssid']}={a['rssi']}" for a in failing)
+        )
+
+    @pytest.mark.smoke
+    @pytest.mark.rssi
+    def test_strongest_ap_above_minus60(self, scan_data):
+        """SMOKE: At least one AP should be stronger than -60 dBm."""
+        strongest = max(scan_data, key=lambda a: a["rssi"])
+        assert strongest["rssi"] &gt;= -60, (
+            f"Strongest AP '{strongest['ssid']}' is only {strongest['rssi']} dBm"
+        )
+
+# Run only smoke tests:  pytest tests/ -m smoke
+# Run only RSSI tests:   pytest tests/ -m rssi
+# Run all:               pytest tests/</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>Running the full suite generates both HTML and Allure reports automatically.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course/tests $ pytest -m smoke</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-dim">collected 15 items / 9 deselected / 6 selected</span>
+
+tests/test_rssi.py::TestRSSICompliance::<span class="t-green">test_all_aps_above_threshold  PASSED</span>
+tests/test_rssi.py::TestRSSICompliance::<span class="t-green">test_strongest_ap_above_minus60  PASSED</span>
+tests/test_security.py::<span class="t-green">test_no_open_networks            PASSED</span>
+tests/test_security.py::<span class="t-green">test_wpa2_or_wpa3_only           PASSED</span>
+tests/test_channels.py::<span class="t-green">test_non_overlapping_channels    PASSED</span>
+tests/test_channels.py::<span class="t-green">test_no_duplicate_channels       PASSED</span>
+
+<span class="t-dim">Generated report: ../reports/latest_report.html</span>
+<span class="t-dim">Allure results: ../allure-results/ (6 result files)</span>
+<span class="t-green">========================= 6 passed in 0.38s =========================</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Phase Complete -->
+  <div class="section-card" style="border-left: 4px solid #a371f7;">
+    <div class="section-card-header">
+      <span class="section-icon">🏆</span>
+      <h2>Phase 4 Complete!</h2>
+    </div>
+    <div class="section-card-body">
+      <p>You've mastered the Industrial Test Frameworks toolkit:</p>
+      <ul>
+        <li><strong>Day 27</strong> — pytest basics: naming, assertions, marks, raises</li>
+        <li><strong>Day 28</strong> — WLAN-specific test cases: RSSI, rogue AP, channel compliance</li>
+        <li><strong>Day 29</strong> — Fixtures and conftest.py with session/yield scope</li>
+        <li><strong>Day 30</strong> — Parametrized testing from inline data and CSV files</li>
+        <li><strong>Day 31</strong> — HTML reports with pytest-html and custom metadata</li>
+        <li><strong>Day 32</strong> — Allure reports with features, steps, and evidence</li>
+        <li><strong>Day 33</strong> — Capstone: full multi-file professional test suite</li>
+      </ul>
+      <p style="margin-top:14px;">Phase 5 starts tomorrow — the most advanced and exciting phase yet. You'll add OTA packet capture, iPerf3 throughput testing, roaming automation, and finally wire everything into a real GitHub Actions CI/CD pipeline.</p>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Complete the test suite with security and connectivity test files:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Create <code>tests/test_security.py</code> with at
+          least 4 tests covering: no open networks, WPA2/3 only, no TKIP pairwise cipher,
+          and PMF status. Mark them with both <code>@pytest.mark.smoke</code> and
+          <code>@pytest.mark.security</code>.</li>
+        <li><strong>Task 2:</strong> Create <code>tests/test_channels.py</code> with tests
+          for: non-overlapping 2.4 GHz channels, 5 GHz channels &gt;= 36, and no two APs
+          with the same SSID on the same channel. Mark channel tests with
+          <code>@pytest.mark.channels</code>.</li>
+        <li><strong>Bonus:</strong> Add a custom pytest command-line option
+          <code>--env {staging,production}</code> that changes the threshold values
+          (production = -70 dBm, staging = -80 dBm) by reading from the fixture. Use
+          <code>pytest_addoption</code> in <code>conftest.py</code>.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> For custom CLI options in conftest.py:
+        <code>def pytest_addoption(parser): parser.addoption("--env", default="staging")</code>.
+        Then in your fixture: <code>env = request.config.getoption("--env")</code>.
+        Pass <code>request</code> as a parameter to your fixture to access CLI options.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#a371f7; margin-bottom:4px;">
+            Up Next · Day 34
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            OTA Packet Capture Automation
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            Phase 5 begins. Tomorrow you'll automate OTA (Over-The-Air) packet
+            captures using tshark from Python — triggering captures, stopping them
+            on condition, and analysing the PCAP for specific frame counts and
+            protocol distributions.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

@@ -1,0 +1,340 @@
+<!-- ============================================================
+     Day 18: Parsing Beacon Frames
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 18</span>
+      <span class="phase-badge" style="background:rgba(210,153,34,0.15); color:#d29922; border:1px solid rgba(210,153,34,0.3);">
+        Phase 3 · Core Automation
+      </span>
+    </div>
+    <h1>Parsing Beacon Frames —<br>Deep AP Intelligence</h1>
+    <p>
+      A beacon frame is an AP's complete advertisement — it contains the SSID, beacon
+      interval, supported capabilities, and dozens of Information Elements packed with
+      details about rates, channels, and security. Today you'll extract every meaningful
+      field and build a live AP database that updates as new beacons arrive.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~55 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>scapy</span></div>
+      <div class="hero-stat"><span>📡</span><span>802.11 Beacon frames</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>What's Inside a Beacon Frame</h3>
+      <p>
+        The 802.11 beacon frame body starts with a fixed 12-byte header containing the
+        timestamp (microseconds since AP boot), beacon interval (usually 100 TUs ≈ 102.4ms),
+        and capability information (a 16-bit flags field indicating whether the AP supports
+        privacy/WEP, short preamble, spectrum management, and more).
+      </p>
+      <p>
+        After the fixed header comes a variable-length chain of <strong>Information
+        Elements</strong> (IEs) — tagged data structures identified by a one-byte ID number.
+        ID 0 = SSID. ID 1 = Supported Rates. ID 3 = Current Channel. ID 48 = RSN (security).
+        Parsing these IEs gives you the complete picture of an AP's capabilities.
+      </p>
+
+      <div class="callout">
+        <strong>Beacon interval reveals AP load and configuration quality.</strong><br>
+        A well-configured AP beacons every 100 TUs (102.4ms). APs beaconing at 200ms
+        or more may be overloaded or misconfigured. Automated testing can verify beacon
+        interval compliance as part of a deployment validation checklist.
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — parse_beacon() and Live AP Database</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>Day18_parse_beacon.py</code>. The <code>parse_beacon()</code>
+        function extracts every important field. <code>update_ap_db()</code> uses it to
+        maintain a live, continuously-updated AP database.
+      </p>
+
+      <div class="step-label">Block 1 — Beacon Frame Structure in Scapy</div>
+      <p>
+        In Scapy, a captured beacon has three layers: <code>RadioTap</code> (physical layer
+        metadata), <code>Dot11</code> (MAC header), and <code>Dot11Beacon</code> (the
+        beacon body with timestamp, interval, and capability info).
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day18_parse_beacon.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 18: Parsing Beacon Frames
+# =============================================================
+
+from scapy.all import (sniff, Dot11, Dot11Beacon, Dot11Elt,
+                       RadioTap, rdpcap)
+
+def decode_capabilities(cap_info):
+    """
+    Decode the 16-bit capability information field from a beacon.
+    Returns a dict of human-readable capability flags.
+    """
+    return {
+        "ess":           bool(cap_info &amp; 0x0001),  # Infrastructure BSS
+        "ibss":          bool(cap_info &amp; 0x0002),  # Ad-hoc IBSS
+        "privacy":       bool(cap_info &amp; 0x0010),  # WEP (legacy encryption bit)
+        "short_preamble":bool(cap_info &amp; 0x0020),
+        "spectrum_mgmt": bool(cap_info &amp; 0x0100),  # DFS/TPC support
+    }
+
+# Test with a sample capability value
+caps = decode_capabilities(0x0431)
+print("[Capabilities]")
+for cap, val in caps.items():
+    print(f"  {cap:20s}: {val}")</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — Walking Information Elements</div>
+      <p>
+        Scapy models each IE as a <code>Dot11Elt</code> layer chained in a linked list.
+        Walking the chain with <code>ie.payload.getlayer(Dot11Elt)</code> gives you
+        all IEs in order.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def walk_ies(pkt):
+    """
+    Walk all Information Elements in a beacon and return a dict.
+    Key = IE ID number, Value = raw bytes of the IE data.
+    """
+    ie_dict = {}
+    ie = pkt.getlayer(Dot11Elt)
+    while ie:
+        ie_dict[ie.ID] = ie.info
+        ie = ie.payload.getlayer(Dot11Elt)
+    return ie_dict
+
+# IE ID reference (most important ones)
+IE_NAMES = {
+    0:  "SSID",
+    1:  "Supported Rates",
+    3:  "Current Channel",
+    7:  "Country",
+    48: "RSN (WPA2/3 Info)",
+    50: "Extended Supported Rates",
+    61: "HT Operation",
+    191:"VHT Capabilities",
+    255:"Extended",
+}</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — Full parse_beacon() Function</div>
+      <p>
+        This is the complete parser that extracts every useful field from a beacon frame
+        into a clean Python dict ready for storage and analysis.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def parse_beacon(pkt):
+    """
+    Fully parse a Scapy beacon frame packet.
+    Returns a dict with all extracted AP information.
+    """
+    if not pkt.haslayer(Dot11Beacon):
+        return None
+
+    bssid     = pkt[Dot11].addr3
+    rssi      = getattr(pkt.getlayer(RadioTap), "dBm_AntSignal", None)
+    beacon    = pkt[Dot11Beacon]
+
+    # Beacon interval is in TUs (1 TU = 1024 microseconds ≈ 1.024ms)
+    interval_ms = beacon.beacon_interval * 1.024
+
+    # Decode capability information field
+    caps = decode_capabilities(int(beacon.cap))
+
+    # Walk IEs to extract SSID and channel
+    ies    = walk_ies(pkt)
+    ssid   = ies.get(0, b"").decode("utf-8", errors="replace").strip()
+    # IE 3 = Current Channel (1 byte)
+    channel_bytes = ies.get(3, b"\x00")
+    channel = channel_bytes[0] if channel_bytes else None
+
+    # Detect PHY generation from IEs
+    has_ht  = 61 in ies    # HT Operation = 802.11n
+    has_vht = 191 in ies   # VHT Caps     = 802.11ac
+    phy = "802.11ax" if has_vht else ("802.11n" if has_ht else "802.11a/g")
+
+    return {
+        "ssid":        ssid,
+        "bssid":       bssid,
+        "rssi":        rssi,
+        "channel":     channel,
+        "interval_ms": round(interval_ms, 1),
+        "privacy":     caps["privacy"],
+        "phy":         phy,
+        "rsn":         48 in ies,   # True if RSN IE present (WPA2/3)
+    }</code></pre>
+      </div>
+
+      <div class="step-label">Block 4 — update_ap_db() Live Database</div>
+      <p>
+        The live database merges new beacon data with existing entries, tracking RSSI
+        history and updating the last-seen timestamp on every new beacon.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">import datetime
+
+ap_db = {}   # {bssid: {parsed fields + rssi_history + counts}}
+
+def update_ap_db(pkt):
+    """Update the live AP database with data from a new beacon."""
+    info = parse_beacon(pkt)
+    if not info or not info["bssid"]:
+        return
+
+    bssid = info["bssid"]
+    now   = datetime.datetime.now()
+
+    if bssid not in ap_db:
+        ap_db[bssid] = {**info,
+                        "rssi_history": [],
+                        "beacon_count": 0,
+                        "first_seen":   now}
+    entry = ap_db[bssid]
+    entry["beacon_count"] += 1
+    entry["last_seen"]     = now
+    if info["rssi"] is not None:
+        entry["rssi_history"].append(info["rssi"])
+    # Keep only last 100 RSSI samples (rolling window)
+    entry["rssi_history"] = entry["rssi_history"][-100:]
+
+IFACE = "wlan0mon"
+print(f"[+] Building live AP database — sniffing beacons for 20s...")
+sniff(iface=IFACE, prn=update_ap_db,
+      lfilter=lambda p: p.haslayer(Dot11Beacon),
+      timeout=20, store=False)
+print(f"[+] Database: {len(ap_db)} APs")</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>After 20 seconds of sniffing, the AP database contains rich detail on each discovered AP.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ sudo python Day18_parse_beacon.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-green">[+] Building live AP database — sniffing beacons for 20s...</span>
+<span class="t-dim">[+] Database: 3 APs</span>
+
+  <span class="t-blue">CorpWifi-5G</span>  AA:BB:CC:01:02:03
+    RSSI avg : -52.1 dBm  (n=196 beacons)
+    Channel  : 36
+    PHY      : 802.11ac
+    Interval : 102.4 ms
+    RSN      : True  Privacy: False
+  CorpWifi-2G  AA:BB:CC:01:02:04
+    RSSI avg : -61.7 dBm  (n=195 beacons)
+    Channel  : 6
+    PHY      : 802.11n
+    Interval : 102.4 ms
+    RSN      : True  Privacy: False</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Add capability compliance checking to the AP database:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Write <code>check_beacon_interval(ap_entry, max_ms=110)</code>
+          that flags any AP beaconing slower than the threshold as "WARN — high beacon
+          interval." Most APs beacon at 102.4ms; anything over 110ms may indicate load issues.</li>
+        <li><strong>Task 2:</strong> After sniffing, generate a compliance report comparing
+          each AP in the database against the Day 8 JSON inventory. Check: correct channel,
+          RSN present (WPA2/3), and beacon interval within range.</li>
+        <li><strong>Bonus:</strong> Detect APs transmitting a blank/hidden SSID (where IE 0
+          is present but empty). Log them as "hidden SSID AP" with their BSSID, channel,
+          and RSSI — a common enterprise security configuration to validate.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> A hidden SSID beacon has IE ID 0 present but with zero
+        length: <code>ies.get(0, b"") == b""</code>. The AP is still discoverable via
+        BSSID — it just won't appear in standard scan results unless a client probes
+        for it by name.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#d29922; margin-bottom:4px;">
+            Up Next · Day 19
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Decoding 802.11 Information Elements
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            You know RSN is present. Tomorrow you'll crack it open — decode the cipher
+            suites, AKM methods, and PMKID fields inside the RSN IE to automatically
+            classify security as WPA3, WPA2-Enterprise, WPA2-Personal, or Open.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

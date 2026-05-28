@@ -1,0 +1,340 @@
+<!-- ============================================================
+     Day 21: WPA3 & SAE — Modern Security Automation
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 21</span>
+      <span class="phase-badge" style="background:rgba(210,153,34,0.15); color:#d29922; border:1px solid rgba(210,153,34,0.3);">
+        Phase 3 · Core Automation
+      </span>
+    </div>
+    <h1>WPA3 &amp; SAE —<br>Modern Security Automation</h1>
+    <p>
+      WPA3 brings Simultaneous Authentication of Equals — a cryptographically stronger
+      handshake that resists offline dictionary attacks. Today you'll detect WPA3-only
+      vs. Transition Mode APs, connect using SAE key management via nmcli, and verify
+      that Protected Management Frames are active on your established connection.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~55 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>subprocess · re</span></div>
+      <div class="hero-stat"><span>🔐</span><span>SAE · PMF · Transition Mode</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>WPA2 Weakness: Offline Dictionary Attacks</h3>
+      <p>
+        WPA2-PSK is vulnerable to offline dictionary attacks. An attacker captures the
+        4-Way Handshake (just 4 frames, visible to anyone in monitor mode), takes it home,
+        and runs millions of password guesses per second against it with a GPU. Weak
+        passwords can be cracked in hours.
+      </p>
+      <p>
+        <strong>WPA3-SAE</strong> eliminates this vulnerability. The Dragonfly key exchange
+        proves knowledge of the password without revealing anything that can be attacked
+        offline. Even a full capture of the SAE exchange yields nothing to a passive attacker.
+      </p>
+
+      <div class="callout">
+        <strong>WPA3 Transition Mode: backward-compatible and secure.</strong><br>
+        An AP in Transition Mode advertises both SAE (for WPA3 clients) and PSK (for
+        WPA2 clients) in its RSN IE. WPA3 clients negotiate SAE automatically; WPA2-only
+        clients fall back to PSK. PMF is required for SAE connections and optional for
+        PSK connections in Transition Mode.
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — Detecting WPA3, Connecting with SAE, Verifying PMF</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>Day21_wpa3_sae.py</code>. This builds on Day 19's security
+        classification to detect WPA3 modes, then connects with the correct key
+        management settings.
+      </p>
+
+      <div class="step-label">Block 1 — detect_wpa3_mode() via nmcli</div>
+      <p>
+        nmcli's <code>RSN-FLAGS</code> field contains a space-separated list of the
+        security options the AP supports. Checking for <code>sae</code> vs.
+        <code>psk</code> tells you exactly which authentication modes are offered.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day21_wpa3_sae.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 21: WPA3 & SAE — Modern Security Automation
+# =============================================================
+
+import subprocess
+import re
+
+def detect_wpa3_mode(ssid):
+    """
+    Query an AP's security capabilities using nmcli.
+    Returns: 'wpa3-only', 'transition', 'wpa2-only', or 'open'
+    """
+    result = subprocess.run(
+        ["nmcli", "--terse", "--fields",
+         "SSID,SECURITY,RSN-FLAGS",
+         "dev", "wifi", "list", "--rescan", "yes"],
+        capture_output=True, text=True, timeout=30
+    )
+
+    for line in result.stdout.splitlines():
+        parts = line.split(":")
+        if len(parts) &lt; 3:
+            continue
+        if parts[0] != ssid:
+            continue
+        rsn_flags = parts[2].lower()
+        has_sae = "sae" in rsn_flags
+        has_psk = "psk" in rsn_flags
+
+        if has_sae and has_psk:
+            return "transition"   # Both = WPA3 Transition Mode
+        elif has_sae:
+            return "wpa3-only"
+        elif has_psk:
+            return "wpa2-only"
+        return "open"
+    return "open"</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — connect_wpa3() with SAE Key Management</div>
+      <p>
+        When connecting to WPA3, nmcli must be told to use SAE key management explicitly.
+        Without this, it may fall back to PSK — which won't use the secure SAE handshake
+        even on Transition Mode APs.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def connect_wpa3(ssid, password, interface="wlan0", timeout=30):
+    """
+    Connect to a WPA3 AP using SAE (Dragonfly) key management.
+    Creates a temporary NM connection profile with explicit SAE settings.
+    PMF is set to 'required' (value=2) as mandated by WPA3.
+    """
+    print(f"[WPA3] Connecting to '{ssid}' with SAE...")
+
+    # Create a new NM connection profile for this WPA3 AP
+    cmd = [
+        "nmcli", "connection", "add",
+        "type",         "wifi",
+        "ifname",       interface,
+        "ssid",         ssid,
+        # key-mgmt=sae forces Dragonfly / SAE authentication
+        "802-11-wireless-security.key-mgmt",  "sae",
+        "802-11-wireless-security.psk",       password,
+        # pmf=2 means 'required' — management frames must be protected
+        "802-11-wireless-security.pmf",       "2",
+        "connection.id",  f"wpa3-test-{ssid}",
+    ]
+    add = subprocess.run(cmd, capture_output=True, text=True)
+    if add.returncode != 0:
+        return False, f"Profile creation failed: {add.stderr.strip()}"
+
+    # Activate the profile
+    up = subprocess.run(
+        ["nmcli", "--wait", str(timeout),
+         "connection", "up", f"wpa3-test-{ssid}", "ifname", interface],
+        capture_output=True, text=True, timeout=timeout + 5
+    )
+    if up.returncode == 0:
+        return True, "Connected via SAE"
+
+    # Clean up failed profile
+    subprocess.run(["nmcli", "connection", "delete", f"wpa3-test-{ssid}"],
+                   capture_output=True)
+    return False, up.stderr.strip() or "Connection failed"</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — check_pmf_active()</div>
+      <p>
+        After connecting, verify that PMF is active. A WPA3 connection without PMF
+        active is a misconfiguration — deauth attacks would still work despite the
+        secure handshake.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def check_pmf_active(interface="wlan0"):
+    """
+    Verify Protected Management Frames are active on the current connection.
+    Returns: (active: bool, details: str)
+    """
+    result = subprocess.run(["iw", "dev", interface, "link"],
+                            capture_output=True, text=True)
+    if "PMF on" in result.stdout or "MFP active" in result.stdout:
+        return True, "PMF is active — management frames are protected"
+
+    # Fallback: check NM connection profile PMF setting
+    nm_result = subprocess.run(
+        ["nmcli", "-t", "-f", "802-11-wireless-security.pmf",
+         "con", "show", "--active"],
+        capture_output=True, text=True
+    )
+    if "required" in nm_result.stdout.lower():
+        return True, "PMF set to required in active connection profile"
+
+    return False, "PMF is not active — management frames are unprotected"</code></pre>
+      </div>
+
+      <div class="step-label">Block 4 — wpa3_test_flow() Orchestrator</div>
+      <p>
+        The test flow detects the AP's WPA3 support, connects with the appropriate
+        method, then verifies PMF. This is the function your pytest test cases will call.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def wpa3_test_flow(ssid, password, interface="wlan0"):
+    """
+    Full WPA3 test: detect mode → connect appropriately → verify PMF.
+    Returns a result dict for pytest assertions.
+    """
+    result = {"ssid": ssid, "mode": None, "connected": False,
+              "pmf_active": False, "overall": "FAIL"}
+
+    mode = detect_wpa3_mode(ssid)
+    result["mode"] = mode
+    print(f"[Mode] {ssid} → {mode}")
+
+    if mode in ("wpa3-only", "transition"):
+        ok, msg = connect_wpa3(ssid, password, interface)
+    else:
+        result["overall"] = "SKIP"
+        return result   # Not a WPA3 AP — skip this test
+
+    result["connected"] = ok
+    print(f"[Connect] {msg}")
+
+    if ok:
+        pmf_ok, pmf_msg = check_pmf_active(interface)
+        result["pmf_active"] = pmf_ok
+        print(f"[PMF] {pmf_msg}")
+        result["overall"] = "PASS" if pmf_ok else "FAIL"
+
+    return result
+
+if __name__ == "__main__":
+    r = wpa3_test_flow("CorpWifi-WPA3", "testpassword123")
+    print(f"\n[Result] {r}")</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>On a WPA3 Transition Mode AP, the test detects both SAE and PSK, connects via SAE, and confirms PMF.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ python Day21_wpa3_sae.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-dim">[Mode] CorpWifi-WPA3 → transition</span>
+<span class="t-green">[WPA3] Connecting to 'CorpWifi-WPA3' with SAE...</span>
+<span class="t-green">[Connect] Connected via SAE</span>
+<span class="t-green">[PMF] PMF is active — management frames are protected</span>
+
+<span class="t-green">[Result] {'ssid': 'CorpWifi-WPA3', 'mode': 'transition',
+         'connected': True, 'pmf_active': True, 'overall': 'PASS'}</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Add enterprise WPA3 and OWE support:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Write <code>connect_wpa3_enterprise(ssid, username, password)</code>
+          that sets <code>key-mgmt=wpa-eap</code> and configures PEAP/MSCHAPv2 credentials
+          via nmcli. Use the same profile-creation approach as <code>connect_wpa3()</code>
+          but with the additional EAP fields.</li>
+        <li><strong>Task 2:</strong> Write <code>detect_owe_support(ssid)</code> that
+          checks whether an Open network also advertises OWE (Opportunistic Wireless
+          Encryption, the WPA3 equivalent for open networks). If OWE is supported,
+          connect using OWE instead of plain open for encrypted-but-passwordless access.</li>
+        <li><strong>Bonus:</strong> Add a <code>downgrade_test(ssid)</code> function that
+          attempts to connect using PSK on a WPA3-only AP. The attempt should fail.
+          Verify it fails gracefully and log the error as an expected failure — not a bug.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> For OWE: <code>key-mgmt=owe</code> in the nmcli connection
+        profile. nmcli automatically negotiates OWE if the AP supports it. You can detect
+        OWE support with <code>"owe" in rsn_flags</code> from the nmcli scan output.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#d29922; margin-bottom:4px;">
+            Up Next · Day 22
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            DHCP Verification Post-Connection
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            You're connected — but is the IP address correct? Tomorrow you'll build
+            a 5-check DHCP validation chain that verifies the IP, subnet mask, gateway,
+            and DHCP server, and reads lease details from NetworkManager's lease files.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

@@ -1,0 +1,184 @@
+<div class="day-content">
+
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-tag">Day 38</span>
+      <span class="phase-tag phase-5">Phase 5 — Advanced Scenarios &amp; CI/CD</span>
+    </div>
+    <h1 class="day-hero-title">WLAN Tests in Nightly CI Pipelines</h1>
+    <p class="day-hero-sub">
+      On-push CI catches code bugs. Nightly CI catches environmental regressions — APs that
+      drifted, DHCP servers that changed, new interference sources. Today you'll set up
+      a scheduled nightly test pipeline with threshold tracking and email/Slack alerts.
+    </p>
+    <div class="day-hero-tags">
+      <span class="tag">Scheduled Cron</span>
+      <span class="tag">Nightly Tests</span>
+      <span class="tag">Trend Tracking</span>
+      <span class="tag">Baseline Delta</span>
+      <span class="tag">Alerts</span>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h2 class="section-title">1 — Nightly Scheduled Workflow</h2>
+    <div class="code-block-wrapper">
+      <div class="code-block-header">
+        <span class="code-lang">bash</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <pre><code class="language-bash">
+# .github/workflows/nightly.yml
+
+name: Nightly WLAN Regression
+
+on:
+  schedule:
+    - cron: '0 23 * * *'   # 11 PM UTC every night
+  workflow_dispatch:         # manual trigger
+
+jobs:
+  nightly-regression:
+    runs-on: self-hosted   # must be your lab machine with Wi-Fi
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run full regression suite
+        env:
+          TEST_ENV: nightly
+          AP_INVENTORY: ${{ secrets.AP_INVENTORY }}
+        run: |
+          pytest tests/ \
+            --html=reports/nightly_report.html \
+            --junit-xml=reports/nightly_results.xml \
+            --alluredir=reports/allure-results \
+            -v 2>&1 | tee reports/nightly.log
+
+      - name: Upload all reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nightly-report-${{ github.run_number }}
+          path: reports/
+          retention-days: 30
+      </code></pre>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h2 class="section-title">2 — Tracking RSSI Trends Across Nightly Runs</h2>
+    <div class="code-block-wrapper">
+      <div class="code-block-header">
+        <span class="code-lang">python</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <pre><code class="language-python">
+import json, datetime, os
+
+TREND_FILE = "reports/rssi_trend.json"
+
+def save_nightly_rssi(ap_results):
+    """Append today's RSSI readings to the trend file."""
+    trend = []
+    if os.path.exists(TREND_FILE):
+        with open(TREND_FILE) as f:
+            trend = json.load(f)
+
+    trend.append({
+        "date":   datetime.date.today().isoformat(),
+        "aps":    ap_results,
+    })
+    with open(TREND_FILE, "w") as f:
+        json.dump(trend, f, indent=2)
+
+
+def detect_rssi_regression(ssid, window=7, drop_threshold=5):
+    """
+    Alert if an AP's average RSSI dropped by more than drop_threshold dBm
+    compared to the rolling average of the last 'window' days.
+    """
+    with open(TREND_FILE) as f:
+        trend = json.load(f)
+
+    history = []
+    for day in trend[-window:]:
+        for ap in day["aps"]:
+            if ap["ssid"] == ssid:
+                history.append(ap["rssi"])
+
+    if len(history) < 2:
+        return None
+
+    baseline = sum(history[:-1]) / len(history[:-1])
+    latest   = history[-1]
+    delta    = baseline - latest   # positive = signal got weaker
+
+    if delta >= drop_threshold:
+        print(f"  ⚠️  REGRESSION: {ssid} RSSI dropped {delta:.1f} dB "
+              f"(baseline: {baseline:.1f}, today: {latest})")
+        return delta
+    return None
+      </code></pre>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h2 class="section-title">3 — Sending a Nightly Alert Email</h2>
+    <div class="code-block-wrapper">
+      <div class="code-block-header">
+        <span class="code-lang">python</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <pre><code class="language-python">
+import smtplib, os
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+def send_alert(subject, body, to_email):
+    """Send a test alert email using SMTP (credentials from env vars)."""
+    smtp_server = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
+    smtp_port   = int(os.environ.get("SMTP_PORT", "587"))
+    from_email  = os.environ["SMTP_FROM"]
+    password    = os.environ["SMTP_PASSWORD"]
+
+    msg = MIMEMultipart()
+    msg["From"]    = from_email
+    msg["To"]      = to_email
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
+
+    with smtplib.SMTP(smtp_server, smtp_port) as server:
+        server.starttls()
+        server.login(from_email, password)
+        server.send_message(msg)
+    print(f"Alert sent to {to_email}")
+
+
+# Example: trigger alert if any test failed
+def nightly_alert_if_failed(results, to_email):
+    failed = [r["ssid"] for r in results if r["result"] != "PASS"]
+    if failed:
+        subject = f"[WLAN CI] {len(failed)} test(s) FAILED — {datetime.date.today()}"
+        body    = f"Failed APs:\n" + "\n".join(f"  - {s}" for s in failed)
+        send_alert(subject, body, to_email)
+      </code></pre>
+    </div>
+  </div>
+
+  <div class="exercise-card">
+    <div class="exercise-header">
+      <span class="exercise-icon">🏋️</span>
+      <h3 class="exercise-title">Day 38 Exercise</h3>
+    </div>
+    <p>Add a conftest.py hook <code>pytest_sessionfinish</code> that reads the JUnit XML
+    <code>results.xml</code> after the test run, counts failures, and calls
+    <code>send_alert()</code> if the failure count is &gt; 0. Test it by intentionally
+    failing one test.</p>
+  </div>
+
+</div>

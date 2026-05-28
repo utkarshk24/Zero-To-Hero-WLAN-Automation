@@ -1,0 +1,348 @@
+<!-- ============================================================
+     Day 16: Phase 2 Capstone — Multi-Channel AP Scanner
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 16</span>
+      <span class="phase-badge" style="background:rgba(63,185,80,0.15); color:#3fb950; border:1px solid rgba(63,185,80,0.3);">
+        Phase 2 · OS &amp; Interfaces
+      </span>
+    </div>
+    <h1>Phase 2 Capstone —<br>Multi-Channel AP Scanner</h1>
+    <p>
+      This is where subprocess, Scapy, channel hopping, frame filtering, and interface
+      management converge. You'll build a production-grade multi-channel AP scanner:
+      a hopper thread cycles all channels, a sniffer thread captures beacons, a shared
+      AP registry accumulates results, and a CSV report is written on completion.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~90 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>scapy · threading · csv</span></div>
+      <div class="hero-stat"><span>🏆</span><span>Capstone Project</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — What This Capstone Builds</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>A Real WLAN Scanner from Scratch</h3>
+      <p>
+        Tools like Kismet, inSSIDer, and Acrylic Wi-Fi are black boxes. You click scan,
+        wait, and get a list of APs. Today you build the same thing from first principles —
+        and because you own every line, you can customise it for any test scenario:
+        add rogue AP detection, RSSI trending, security auditing, or channel utilisation
+        analysis.
+      </p>
+
+      <div class="callout">
+        <strong>Architecture: three concurrent components.</strong><br>
+        <strong>Hopper thread</strong> — cycles channels every 150ms using <code>iw</code>.<br>
+        <strong>Sniffer thread</strong> — calls <code>sniff()</code> to capture beacons on the current channel.<br>
+        <strong>AP Registry</strong> — a thread-safe shared dict accumulating all discovered APs with RSSI history.
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — The Complete Multi-Channel Scanner</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>Day16_capstone.py</code>. This is the most complex script so far.
+        Read each function carefully — each one is small and independently testable.
+      </p>
+
+      <div class="step-label">Block 1 — Imports, Channel Plan, and AP Registry</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day16_capstone.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 16 Capstone: Multi-Channel AP Scanner
+# Combines: channel hopper + scapy sniffer + AP registry + CSV
+# Requires: root/sudo + monitor-mode capable adapter
+# =============================================================
+
+import threading, time, csv, sys, subprocess
+from pathlib import Path
+from collections import defaultdict
+from scapy.all import sniff, Dot11, Dot11Beacon, Dot11Elt, RadioTap
+import datetime
+
+CHANNELS = [1, 6, 11, 36, 40, 44, 48, 149, 153, 157, 161]
+IFACE    = "wlan0mon"
+
+# Thread-safe AP registry using a lock
+# Structure: {bssid: {ssid, rssi_samples, channel, first_seen, last_seen}}
+ap_registry = {}
+registry_lock = threading.Lock()   # Prevents concurrent write corruption</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — Beacon Handler with RSSI History</div>
+      <p>
+        Instead of storing just the latest RSSI, the registry keeps a list of all RSSI
+        samples. This enables min/max/average RSSI reporting — much more useful for
+        coverage analysis than a single snapshot value.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def parse_beacon_ssid(pkt):
+    """Extract SSID string from a beacon frame's Information Elements."""
+    ie = pkt.getlayer(Dot11Elt)
+    while ie:
+        if ie.ID == 0:
+            return ie.info.decode("utf-8", errors="replace").strip()
+        ie = ie.payload.getlayer(Dot11Elt)
+    return ""
+
+def beacon_handler(pkt):
+    """
+    Process a beacon frame and update the AP registry.
+    Uses a lock to safely update the shared registry from the sniffer thread.
+    """
+    if not pkt.haslayer(Dot11Beacon):
+        return
+
+    bssid = pkt[Dot11].addr3
+    ssid  = parse_beacon_ssid(pkt)
+    rssi  = getattr(pkt.getlayer(RadioTap), "dBm_AntSignal", None)
+    now   = datetime.datetime.now().isoformat(timespec="seconds")
+
+    with registry_lock:   # Acquire lock before modifying shared dict
+        if bssid not in ap_registry:
+            ap_registry[bssid] = {
+                "ssid": ssid, "bssid": bssid,
+                "rssi_samples": [], "channel": None,
+                "first_seen": now, "last_seen": now
+            }
+        entry = ap_registry[bssid]
+        if rssi is not None:
+            entry["rssi_samples"].append(rssi)
+        entry["last_seen"] = now</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — Hopper Thread and Sniffer</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def channel_hopper(iface, channels, dwell, stop_event):
+    """Hop channels in a loop until stop_event is set."""
+    idx = 0
+    while not stop_event.is_set():
+        ch = channels[idx % len(channels)]
+        subprocess.run(["iw", "dev", iface, "set", "channel", str(ch)],
+                       capture_output=True)
+        time.sleep(dwell)
+        idx += 1
+
+def run_scanner(iface, duration=30):
+    """
+    Run the multi-channel scanner for `duration` seconds.
+    Starts hopper thread, then sniffs in the main thread.
+    """
+    stop_event = threading.Event()
+    hopper     = threading.Thread(
+        target=channel_hopper,
+        args=(iface, CHANNELS, 0.15, stop_event),
+        daemon=True
+    )
+    hopper.start()
+    print(f"[+] Scanning {len(CHANNELS)} channels for {duration}s on {iface}")
+
+    try:
+        sniff(iface=iface, prn=beacon_handler,
+              lfilter=lambda p: p.haslayer(Dot11Beacon),
+              timeout=duration, store=False)
+    finally:
+        stop_event.set()
+        print(f"[+] Scan complete. {len(ap_registry)} APs discovered.")</code></pre>
+      </div>
+
+      <div class="step-label">Block 4 — CSV Report Writer and Main Entry Point</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def write_report(registry, out_path):
+    """Write AP registry to a CSV report with RSSI statistics."""
+    rows = []
+    for bssid, info in registry.items():
+        samples = info["rssi_samples"]
+        avg_rssi = sum(samples) / len(samples) if samples else None
+        rows.append({
+            "ssid":       info["ssid"],
+            "bssid":      bssid,
+            "rssi_avg":   f"{avg_rssi:.1f}" if avg_rssi else "N/A",
+            "rssi_min":   min(samples) if samples else "N/A",
+            "rssi_max":   max(samples) if samples else "N/A",
+            "beacons":    len(samples),
+            "first_seen": info["first_seen"],
+            "last_seen":  info["last_seen"],
+        })
+
+    # Sort by average RSSI descending (strongest first)
+    rows.sort(key=lambda r: float(r["rssi_avg"]) if r["rssi_avg"] != "N/A" else -999,
+              reverse=True)
+
+    with open(out_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+    print(f"[CSV] Report: {out_path}  ({len(rows)} APs)")
+
+def main():
+    out = Path("reports")
+    out.mkdir(exist_ok=True)
+    run_scanner(IFACE, duration=30)
+    if ap_registry:
+        ts   = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        path = out / f"ap_scan_{ts}.csv"
+        write_report(ap_registry, path)
+        # Print top 5 APs
+        print("\n[Top APs by RSSI]")
+        for bssid, info in list(ap_registry.items())[:5]:
+            s = info["rssi_samples"]
+            avg = sum(s)/len(s) if s else 0
+            print(f"  {info['ssid']:25s} {bssid}  avg {avg:.1f} dBm")
+    sys.exit(0)
+
+if __name__ == "__main__":
+    main()</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>A 30-second multi-channel scan discovers APs and produces a timestamped CSV report.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ sudo python Day16_capstone.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-green">[+] Scanning 11 channels for 30s on wlan0mon</span>
+<span class="t-dim">[+] Scan complete. 5 APs discovered.</span>
+<span class="t-blue">[CSV] Report: reports/ap_scan_20240115_090030.csv  (5 APs)</span>
+
+<span class="t-green">[Top APs by RSSI]</span>
+  CorpWifi-5G               AA:BB:CC:01:02:03  avg -52.4 dBm
+  CorpWifi-2G               AA:BB:CC:01:02:04  avg -61.8 dBm
+  GuestWifi                 AA:BB:CC:01:02:05  avg -68.1 dBm
+  NeighbourAP-5G            DD:EE:FF:AA:BB:01  avg -74.3 dBm
+  <span class="t-yellow">UnknownAP                 11:22:33:44:55:66  avg -81.0 dBm</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Phase Complete -->
+  <div class="section-card" style="border-left: 4px solid #3fb950;">
+    <div class="section-card-header">
+      <span class="section-icon">🏆</span>
+      <h2>Phase 2 Complete!</h2>
+    </div>
+    <div class="section-card-body">
+      <p>You've mastered the OS &amp; Interfaces toolkit:</p>
+      <ul>
+        <li><strong>Day 9</strong> — subprocess.run(), cross-platform command selection, safe_run()</li>
+        <li><strong>Day 10</strong> — Regex parsing of iwconfig and netsh output</li>
+        <li><strong>Day 11</strong> — Scapy: building 802.11 frames and sniffing packets</li>
+        <li><strong>Day 12</strong> — Monitor mode, RadioTap RSSI, beacon handlers</li>
+        <li><strong>Day 13</strong> — Channel hopping with ChannelHopper thread</li>
+        <li><strong>Day 14</strong> — Frame type/subtype filters and deauth storm detector</li>
+        <li><strong>Day 15</strong> — Interface context manager and pre-test checklist</li>
+        <li><strong>Day 16</strong> — Capstone: full multi-channel AP scanner</li>
+      </ul>
+      <p style="margin-top:14px;">Phase 3 starts tomorrow: you'll use all this knowledge to automate real WLAN connections — connecting to SSIDs, verifying DHCP, testing DNS, and monitoring RSSI over time.</p>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Add two production-grade features to the scanner:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Integrate the Day 8 JSON inventory. After scanning,
+          compare discovered APs against the expected inventory — flag APs that are in
+          the scan but not in the inventory as "potential rogue APs" and include them
+          with a <code>rogue=True</code> flag in the CSV report.</li>
+        <li><strong>Task 2:</strong> Add a live console display that updates every 2
+          seconds during scanning. Use <code>print("\033[2J\033[H", end="")</code> to
+          clear the terminal, then print a sorted table of all APs seen so far — like
+          a live <code>top</code> command but for Wi-Fi APs.</li>
+        <li><strong>Bonus:</strong> Save the raw beacon frames to a PCAP file using
+          Scapy's <code>wrpcap()</code> alongside the CSV report, so analysts can
+          re-inspect the captured frames later in Wireshark.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> For the live display, run a separate
+        <code>threading.Thread</code> that wakes up every 2 seconds, acquires the
+        <code>registry_lock</code>, reads the current AP registry, releases the lock,
+        and reprints the table. Never hold the lock while doing I/O (printing) —
+        release it first.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#3fb950; margin-bottom:4px;">
+            Up Next · Day 17
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Scanning for SSIDs Programmatically
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            Phase 3 begins. You've been watching frames fly by — now you'll take action.
+            Starting tomorrow, you'll trigger scans, parse SSID lists, and build logic
+            to wait until a target network appears before initiating a connection.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

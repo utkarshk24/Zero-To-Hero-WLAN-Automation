@@ -1,0 +1,437 @@
+<!-- ============================================================
+     Day 8: Phase 1 Capstone — WLAN Config Parser & Validator
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 08</span>
+      <span class="phase-badge" style="background:rgba(88,166,255,0.15); color:#58a6ff; border:1px solid rgba(88,166,255,0.3);">
+        Phase 1 · Fundamentals
+      </span>
+    </div>
+    <h1>Phase 1 Capstone —<br>WLAN Config Parser &amp; Validator</h1>
+    <p>
+      This is where Days 1–7 come together. You'll build a complete WLAN validation tool:
+      it loads a JSON AP inventory, reads YAML thresholds, runs a simulated scan,
+      validates every AP against both configs, and outputs a timestamped CSV report plus
+      a human-readable summary.txt — one command, full audit trail.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~90 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>json · yaml · csv · pathlib</span></div>
+      <div class="hero-stat"><span>🏆</span><span>Capstone Project</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — What This Capstone Builds</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>Bringing It All Together</h3>
+      <p>
+        In Days 1–7 you've built every individual component: a Python environment,
+        reusable functions, file I/O, JSON parsing, and YAML config loading. A capstone
+        project is where you wire all those components into a single cohesive tool that
+        solves a real problem.
+      </p>
+      <p>
+        The problem we're solving: a WLAN test engineer needs to verify that every AP in a
+        deployment matches its documented configuration — correct SSID, correct channel,
+        correct security, and RSSI above the site threshold. Doing this manually takes
+        30 minutes per floor. With this tool: one command, 5 seconds.
+      </p>
+
+      <div class="callout">
+        <strong>This is a production-grade tool, not a demo.</strong><br>
+        It reads real config files, validates against real criteria, and writes real output
+        files. Swap the simulated scan for a real <code>subprocess</code> call to
+        <code>iwlist scan</code> (Day 9) and it works on a live network.
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Requirements Table -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🛠</span>
+      <h2>Capstone Requirements</h2>
+    </div>
+    <div class="section-card-body">
+      <table class="req-table">
+        <thead>
+          <tr><th>Component</th><th>Details</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>ap_inventory.json</strong></td>
+            <td>JSON file listing all expected APs with BSSID, channel, security</td>
+            <td><span class="req-tag ok">Day 7</span></td>
+          </tr>
+          <tr>
+            <td><strong>test_config.yaml</strong></td>
+            <td>YAML file with RSSI thresholds and required security types</td>
+            <td><span class="req-tag ok">Day 7</span></td>
+          </tr>
+          <tr>
+            <td><strong>Simulated scan</strong></td>
+            <td>Python list of dicts mimicking a real Wi-Fi scan result</td>
+            <td><span class="req-tag ok">Day 7</span></td>
+          </tr>
+          <tr>
+            <td><strong>Validation engine</strong></td>
+            <td>Check RSSI, security, channel per AP against both configs</td>
+            <td><span class="req-tag">Build today</span></td>
+          </tr>
+          <tr>
+            <td><strong>CSV report</strong></td>
+            <td>Timestamped results file with pass/fail per AP</td>
+            <td><span class="req-tag">Build today</span></td>
+          </tr>
+          <tr>
+            <td><strong>summary.txt</strong></td>
+            <td>Human-readable overall score and fail reasons</td>
+            <td><span class="req-tag">Build today</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — The Complete Validation Tool</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>Day08_capstone.py</code>. This is the largest script so far —
+        read every comment carefully. Each function is small and testable in isolation.
+      </p>
+
+      <div class="step-label">Block 1 — Imports and Config Loaders</div>
+      <p>
+        The script loads two separate config sources: structured AP data from JSON and
+        threshold parameters from YAML. Keeping data and config separate is a core
+        software engineering principle — it lets you update thresholds without touching
+        the AP inventory and vice versa.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day08_capstone.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 8 Capstone: WLAN Config Parser & Validator
+# Combines: JSON inventory + YAML thresholds + simulated scan
+#           + validation engine + CSV report + summary.txt
+# =============================================================
+
+import json, yaml, csv, sys
+import datetime
+from pathlib import Path
+
+def load_inventory(path):
+    """Load AP inventory from a JSON file."""
+    with open(path) as f:
+        return json.load(f)
+
+def load_config(path):
+    """Load test thresholds from a YAML file."""
+    with open(path) as f:
+        return yaml.safe_load(f)
+
+def get_simulated_scan():
+    """
+    Return a simulated Wi-Fi scan result.
+    In Day 9+ this will be replaced with a real subprocess call.
+    """
+    return [
+        {"ssid": "CorpWifi-5G", "bssid": "AA:BB:CC:01:02:03",
+         "rssi": -55, "channel": 36, "security": "WPA2"},
+        {"ssid": "CorpWifi-2G", "bssid": "AA:BB:CC:01:02:04",
+         "rssi": -76, "channel": 6,  "security": "WPA2"},
+        {"ssid": "GuestWifi",   "bssid": "AA:BB:CC:01:02:05",
+         "rssi": -68, "channel": 11, "security": "Open"},
+    ]</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — Multi-Check Validation Engine</div>
+      <p>
+        The validation engine checks each AP against three independent criteria. Each
+        check returns a reason string if it fails, or <code>None</code> if it passes.
+        Collecting all failures before returning lets you give the engineer a complete
+        picture — not just the first failure.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def validate_ap(expected, actual, thresholds):
+    """
+    Validate one AP against its expected config and site thresholds.
+    Returns: list of failure strings (empty list = PASS).
+    """
+    failures = []
+    min_rssi       = thresholds["min_rssi_dbm"]
+    required_sec   = thresholds["required_security"]
+
+    # Check 1: RSSI threshold
+    if actual["rssi"] &lt; min_rssi:
+        failures.append(
+            f"RSSI {actual['rssi']} dBm below threshold {min_rssi} dBm"
+        )
+
+    # Check 2: Security type must be in the approved list
+    if actual["security"] not in required_sec:
+        failures.append(
+            f"Security '{actual['security']}' not in approved {required_sec}"
+        )
+
+    # Check 3: Channel must match the declared channel
+    if actual["channel"] != expected["channel"]:
+        failures.append(
+            f"Channel {actual['channel']} does not match expected {expected['channel']}"
+        )
+
+    return failures   # Empty = PASS
+
+def run_validation(inventory, live_scan, thresholds):
+    """
+    Run full validation for every expected AP.
+    Returns: list of result dicts ready for CSV output.
+    """
+    scan_lookup = {ap["ssid"]: ap for ap in live_scan}
+    results = []
+
+    for expected in inventory["access_points"]:
+        ssid   = expected["ssid"]
+        actual = scan_lookup.get(ssid)
+        ts     = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        if actual is None:
+            results.append({"timestamp": ts, "ssid": ssid,
+                             "result": "FAIL", "reason": "AP not found in scan",
+                             "rssi": "N/A", "security": "N/A", "channel": "N/A"})
+            continue
+
+        failures = validate_ap(expected, actual, thresholds)
+        status   = "PASS" if not failures else "FAIL"
+        reason   = "; ".join(failures) if failures else "All checks passed"
+
+        results.append({"timestamp": ts, "ssid": ssid,
+                         "result": status, "reason": reason,
+                         "rssi": actual["rssi"], "security": actual["security"],
+                         "channel": actual["channel"]})
+    return results</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — CSV Report Writer</div>
+      <p>
+        The CSV report is the machine-readable output — perfect for feeding into dashboards,
+        CI artefacts, or email attachments.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def write_csv_report(results, out_dir):
+    """Write validation results to a timestamped CSV file."""
+    ts_file = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = out_dir / f"report_{ts_file}.csv"
+
+    fields = ["timestamp", "ssid", "result", "reason", "rssi", "security", "channel"]
+    with open(path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(results)
+
+    print(f"[CSV] Report written: {path}")
+    return path</code></pre>
+      </div>
+
+      <div class="step-label">Block 4 — summary.txt Writer and Main Entry Point</div>
+      <p>
+        The summary file is the human-readable output — what an engineer reads first.
+        The main function orchestrates all previous components and exits with code 0
+        (success) or 1 (failures found), making the tool CI-friendly.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def write_summary(results, out_dir):
+    """Write human-readable summary.txt."""
+    passed = [r for r in results if r["result"] == "PASS"]
+    failed = [r for r in results if r["result"] == "FAIL"]
+    path = out_dir / "summary.txt"
+
+    with open(path, "w") as f:
+        f.write(f"WLAN Validation Summary\n")
+        f.write(f"Run at: {datetime.datetime.now()}\n")
+        f.write(f"{'='*50}\n")
+        f.write(f"Total APs : {len(results)}\n")
+        f.write(f"PASSED    : {len(passed)}\n")
+        f.write(f"FAILED    : {len(failed)}\n\n")
+        if failed:
+            f.write("FAILURES:\n")
+            for r in failed:
+                f.write(f"  ✗ {r['ssid']} — {r['reason']}\n")
+    print(f"[TXT] Summary written: {path}")
+
+def main():
+    out_dir = Path("reports")
+    out_dir.mkdir(exist_ok=True)   # Create reports/ folder if it doesn't exist
+
+    # Load configs (files created by Day 7 script)
+    inventory  = load_inventory(Path("ap_inventory.json"))
+    config     = load_config(Path("test_config.yaml"))
+    thresholds = config["thresholds"]
+    live_scan  = get_simulated_scan()
+
+    # Run validation
+    results = run_validation(inventory, live_scan, thresholds)
+
+    # Write outputs
+    write_csv_report(results, out_dir)
+    write_summary(results, out_dir)
+
+    # Print console summary
+    failed = [r for r in results if r["result"] == "FAIL"]
+    print(f"\n{'='*40}")
+    print(f"RESULT: {len(results) - len(failed)}/{len(results)} APs PASSED")
+    if failed:
+        print(f"FAILED APs:")
+        for r in failed:
+            print(f"  ✗ {r['ssid']}: {r['reason']}")
+
+    sys.exit(1 if failed else 0)   # CI-friendly exit code
+
+if __name__ == "__main__":
+    main()</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>The capstone script runs the full validation pipeline and writes both report files.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ python Day08_capstone.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-blue">[CSV] Report written: reports/report_20240115_090001.csv</span>
+<span class="t-blue">[TXT] Summary written: reports/summary.txt</span>
+
+<span class="t-dim">========================================</span>
+RESULT: 1/3 APs PASSED
+<span class="t-red">FAILED APs:</span>
+  <span class="t-red">✗ CorpWifi-2G: RSSI -76 dBm below threshold -70 dBm</span>
+  <span class="t-red">✗ GuestWifi: Security 'Open' not in approved ['WPA2', 'WPA3']</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Phase Complete -->
+  <div class="section-card" style="border-left: 4px solid #58a6ff;">
+    <div class="section-card-header">
+      <span class="section-icon">🏆</span>
+      <h2>Phase 1 Complete!</h2>
+    </div>
+    <div class="section-card-body">
+      <p>You've mastered the Fundamentals toolkit:</p>
+      <ul>
+        <li><strong>Day 1</strong> — Python environment setup and network interface discovery</li>
+        <li><strong>Day 2</strong> — Variables, data types, and Wi-Fi scan logic</li>
+        <li><strong>Day 3</strong> — Control flow: if/elif, loops, and channel logic</li>
+        <li><strong>Day 4</strong> — Reusable functions and your personal wlan_utils module</li>
+        <li><strong>Day 5</strong> — Virtual environments, pip, and requirements.txt</li>
+        <li><strong>Day 6</strong> — File I/O: config files, log files, CSV results</li>
+        <li><strong>Day 7</strong> — JSON and YAML parsing for structured configs</li>
+        <li><strong>Day 8</strong> — Capstone: full validation tool with reports</li>
+      </ul>
+      <p style="margin-top:14px;">Phase 2 starts tomorrow: you'll leave Python data structures behind and start talking directly to the OS — running commands, parsing real Wi-Fi tool output, and capturing packets with Scapy.</p>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Extend the capstone to handle rogue AP detection:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> After validation, check whether any SSIDs in the
+          live scan are <em>not</em> present in the JSON inventory. These are potential
+          rogue APs. Print them as WARN entries in both the CSV and summary.txt.</li>
+        <li><strong>Task 2:</strong> Add a <code>--site</code> command-line argument
+          using <code>sys.argv</code> so the script can load different inventory files
+          for different floors: <code>python Day08_capstone.py --site floor3</code>
+          loads <code>floor3_inventory.json</code>.</li>
+        <li><strong>Bonus:</strong> Add a <code>--strict</code> flag that causes the
+          script to exit with code 1 even if there are WARN-level issues (rogue APs),
+          not just FAIL-level ones.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> Build a set of expected BSSIDs from the inventory:
+        <code>expected_bssids = {ap["bssid"] for ap in inventory["access_points"]}</code>.
+        Then check each scan result: <code>if ap["bssid"] not in expected_bssids</code>
+        — that's a rogue.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#58a6ff; margin-bottom:4px;">
+            Up Next · Day 9
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            subprocess — Running OS Commands from Python
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            Your validator uses simulated scan data. Starting tomorrow, it uses real data.
+            You'll learn to run <code>iwconfig</code>, <code>airport</code>, and
+            <code>netsh</code> from Python and capture their output as clean strings
+            ready for parsing.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

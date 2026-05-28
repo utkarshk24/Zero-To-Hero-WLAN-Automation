@@ -1,0 +1,338 @@
+<!-- ============================================================
+     Day 35: Throughput Testing with iPerf3
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 35</span>
+      <span class="phase-badge" style="background:rgba(248,81,73,0.15); color:#f85149; border:1px solid rgba(248,81,73,0.3);">
+        Phase 5 · Advanced &amp; CI/CD
+      </span>
+    </div>
+    <h1>Throughput Testing —<br>iPerf3 from Python</h1>
+    <p>
+      Signal strength is a proxy for quality. Throughput is the truth. Today you'll
+      run iPerf3 TCP and UDP tests programmatically, parse the JSON output to extract
+      Mbps, jitter, and packet loss, and write pytest assertions against your WLAN
+      deployment's throughput SLA requirements.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~55 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>subprocess · json</span></div>
+      <div class="hero-stat"><span>📊</span><span>iPerf3 · TCP · UDP · Mbps</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>Why RSSI Isn't Enough</h3>
+      <p>
+        An RSSI of -60 dBm suggests good signal quality. But that same -60 dBm AP might
+        only deliver 5 Mbps of actual throughput if the channel is congested with
+        interference from neighbouring APs, or if the client's rate selection algorithm
+        is choosing a conservative MCS rate. Throughput testing cuts through all these
+        variables and measures what users actually experience.
+      </p>
+
+      <div class="callout">
+        <strong>iPerf3 --json output makes parsing trivial.</strong><br>
+        <code>iperf3 -c server -J</code> outputs a single JSON object containing
+        the complete test result: start time, intervals, summary stats, and error messages.
+        <code>json.loads(result.stdout)</code> gives you a Python dict with everything
+        you need — no regex, no string parsing.
+      </div>
+
+      <h3>TCP vs. UDP Testing</h3>
+      <p>
+        <strong>TCP</strong> throughput measures how fast a real file transfer would go —
+        TCP's congestion control and retransmission mechanisms mean the measured Mbps
+        directly reflects the usable bandwidth for applications. <strong>UDP</strong>
+        testing (with <code>-u -b 100M</code>) measures jitter and packet loss — the
+        metrics that matter for VoIP, video conferencing, and real-time applications
+        that can't retransmit lost packets.
+      </p>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — run_iperf3(), bidirectional_test(), udp_quality_test()</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Install iPerf3: <code>sudo apt install iperf3</code> (Linux) or
+        <code>brew install iperf3</code> (macOS). You need an iPerf3 server running
+        on the network: <code>iperf3 -s</code>.
+      </p>
+
+      <div class="step-label">Block 1 — run_iperf3() with JSON Output Parsing</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day35_iperf3.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 35: Throughput Testing with iPerf3
+# Requires: iperf3 installed + iperf3 server running on network
+# =============================================================
+
+import subprocess
+import json
+
+def run_iperf3(server, duration=10, protocol="tcp", bitrate=None,
+               reverse=False, port=5201):
+    """
+    Run an iPerf3 test and return parsed results.
+
+    Args:
+        server:   iPerf3 server IP or hostname
+        duration: Test duration in seconds (default 10)
+        protocol: 'tcp' or 'udp'
+        bitrate:  Target bitrate for UDP (e.g. '100M' = 100 Mbps)
+        reverse:  If True, measure download (server→client)
+        port:     iPerf3 server port (default 5201)
+
+    Returns:
+        dict with: mbps, jitter_ms, lost_pct, retransmits, error
+    """
+    cmd = ["iperf3", "-c", server, "-p", str(port),
+           "-t", str(duration), "-J"]   # -J = JSON output
+
+    if protocol == "udp":
+        cmd.extend(["-u"])
+        if bitrate:
+            cmd.extend(["-b", bitrate])   # UDP must specify target bitrate
+
+    if reverse:
+        cmd.append("-R")   # Reverse = download test (server sends to client)
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=duration + 30)
+
+    if result.returncode != 0:
+        return {"error": result.stderr.strip() or "iperf3 failed", "mbps": 0}
+
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return {"error": "Failed to parse iperf3 JSON output", "mbps": 0}
+
+    # Navigate the iPerf3 JSON structure
+    end = data.get("end", {})
+    streams = end.get("streams", [{}])
+    summary = end.get("sum_sent", end.get("sum", {}))
+
+    # TCP: bits_per_second in sum_sent
+    # UDP: bits_per_second + jitter + lost_percent in sum
+    mbps = summary.get("bits_per_second", 0) / 1e6
+    jitter    = summary.get("jitter_ms", 0)
+    lost_pct  = summary.get("lost_percent", 0)
+    retrans   = summary.get("retransmits", 0)
+
+    return {
+        "mbps":       round(mbps, 2),
+        "jitter_ms":  round(jitter, 3),
+        "lost_pct":   round(lost_pct, 2),
+        "retransmits": retrans,
+        "duration_s": duration,
+        "protocol":   protocol,
+        "reverse":    reverse,
+        "error":      None,
+    }
+
+# Quick test
+# result = run_iperf3("192.168.1.1", duration=5)
+# print(f"TCP Throughput: {result['mbps']:.1f} Mbps  Retransmits: {result['retransmits']}")</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — bidirectional_test()</div>
+      <p>
+        Bidirectional testing (upload + download) is more comprehensive than single
+        direction. Most WLAN issues affect asymmetric traffic differently — a congested
+        downlink might still have a clean uplink.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def bidirectional_test(server, duration=10):
+    """
+    Run both upload and download TCP iPerf3 tests.
+    Returns a summary dict with both directions.
+    """
+    print(f"[iPerf3] Upload test ({duration}s)...")
+    upload = run_iperf3(server, duration=duration, reverse=False)
+
+    print(f"[iPerf3] Download test ({duration}s)...")
+    download = run_iperf3(server, duration=duration, reverse=True)
+
+    summary = {
+        "upload_mbps":   upload.get("mbps", 0),
+        "download_mbps": download.get("mbps", 0),
+        "upload_retrans": upload.get("retransmits", 0),
+        "download_retrans": download.get("retransmits", 0),
+    }
+
+    print(f"\n[Throughput Summary]")
+    print(f"  Upload   : {summary['upload_mbps']:6.1f} Mbps  "
+          f"(retransmits: {summary['upload_retrans']})")
+    print(f"  Download : {summary['download_mbps']:6.1f} Mbps  "
+          f"(retransmits: {summary['download_retrans']})")
+
+    return summary</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — udp_quality_test() for Jitter and Loss</div>
+      <p>
+        UDP testing at a fixed bitrate reveals jitter and packet loss — metrics that
+        matter for real-time applications like video conferencing and VoIP.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def udp_quality_test(server, bitrate="50M", duration=10):
+    """
+    Run a UDP iPerf3 test to measure jitter and packet loss.
+    These metrics directly predict VoIP/video conferencing quality.
+    """
+    print(f"[iPerf3] UDP quality test at {bitrate} ({duration}s)...")
+    result = run_iperf3(server, duration=duration, protocol="udp",
+                         bitrate=bitrate)
+
+    print(f"\n[UDP Quality]")
+    print(f"  Jitter       : {result.get('jitter_ms', '?'):.3f} ms")
+    print(f"  Packet loss  : {result.get('lost_pct', '?'):.2f}%")
+    print(f"  Actual Mbps  : {result.get('mbps', '?'):.1f}")
+
+    return result
+
+import pytest
+
+@pytest.mark.integration
+def test_throughput_meets_sla():
+    """Upload and download must both exceed 50 Mbps for 802.11ac deployment."""
+    SERVER = "192.168.1.1"   # Replace with your iPerf3 server IP
+    result = bidirectional_test(SERVER, duration=10)
+    assert result["upload_mbps"]   &gt;= 50, f"Upload {result['upload_mbps']:.1f} Mbps below 50 Mbps SLA"
+    assert result["download_mbps"] &gt;= 50, f"Download {result['download_mbps']:.1f} Mbps below 50 Mbps SLA"
+
+@pytest.mark.integration
+def test_udp_jitter_acceptable():
+    """UDP jitter must be below 10ms for VoIP quality."""
+    SERVER = "192.168.1.1"
+    result = udp_quality_test(SERVER, bitrate="10M", duration=10)
+    assert result.get("jitter_ms", 999) &lt; 10, f"Jitter {result.get('jitter_ms')} ms exceeds 10ms"
+    assert result.get("lost_pct", 100) &lt; 1.0, f"Packet loss {result.get('lost_pct')}% exceeds 1%"</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>On an 802.11ac connection, both upload and download should comfortably exceed 100 Mbps.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ python Day35_iperf3.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-dim">[iPerf3] Upload test (10s)...</span>
+<span class="t-dim">[iPerf3] Download test (10s)...</span>
+
+<span class="t-green">[Throughput Summary]</span>
+  Upload   : <span class="t-green">187.4</span> Mbps  (retransmits: 2)
+  Download : <span class="t-green">213.1</span> Mbps  (retransmits: 0)
+
+<span class="t-dim">[iPerf3] UDP quality test at 50M (10s)...</span>
+
+<span class="t-blue">[UDP Quality]</span>
+  Jitter       : <span class="t-green">0.312</span> ms
+  Packet loss  : <span class="t-green">0.00%</span>
+  Actual Mbps  : 49.8</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Extend iPerf3 testing with retransmit analysis and SLA profiles:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Write <code>throughput_sla_profile(profile)</code>
+          that accepts a profile name ("office", "video_conf", "file_transfer") and
+          returns the appropriate SLA thresholds for that use case. Office = 20 Mbps
+          each direction, video_conf = 10 Mbps + jitter &lt; 20ms, file_transfer = 50 Mbps.
+          Add pytest parametrized tests for all three profiles.</li>
+        <li><strong>Task 2:</strong> Run multiple 10-second TCP tests back-to-back and
+          track how throughput changes over time. Plot the throughput trend as a simple
+          ASCII bar chart using the technique from Day 24.</li>
+        <li><strong>Bonus:</strong> Add iPerf3 parallel streams support (<code>-P 4</code>)
+          to test multi-stream performance. Write a test that compares single-stream vs.
+          4-stream throughput and asserts that 4-stream is at least 2× single-stream
+          (demonstrating channel bonding and MIMO benefits).</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> For parallel streams, add <code>"-P", "4"</code> to the
+        iperf3 command. In the JSON output, <code>end["sum_sent"]["bits_per_second"]</code>
+        gives the aggregate throughput across all streams. Each individual stream is
+        in <code>end["streams"][i]["sender"]["bits_per_second"]</code>.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#f85149; margin-bottom:4px;">
+            Up Next · Day 36
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Roaming Automation (802.11r/k/v)
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            The ultimate WLAN test: roaming. Tomorrow you'll detect roaming capabilities,
+            measure roaming latency by polling the connected BSSID at 10ms intervals,
+            and trigger a BTM roam request using tshark injection.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

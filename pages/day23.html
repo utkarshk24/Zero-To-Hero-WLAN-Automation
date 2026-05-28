@@ -1,0 +1,368 @@
+<!-- ============================================================
+     Day 23: DNS Resolution Testing Automation
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 23</span>
+      <span class="phase-badge" style="background:rgba(210,153,34,0.15); color:#d29922; border:1px solid rgba(210,153,34,0.3);">
+        Phase 3 · Core Automation
+      </span>
+    </div>
+    <h1>DNS Resolution Testing —<br>Automating Network Reachability Checks</h1>
+    <p>
+      DNS is the first thing that breaks when a network has problems — and the last
+      thing engineers check. Today you'll use <code>dnspython</code> to measure
+      resolution latency with millisecond precision, benchmark four DNS servers in
+      parallel, and build a <code>dns_health_check()</code> function that validates
+      canary domains to confirm the network is fully operational.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~50 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>dnspython</span></div>
+      <div class="hero-stat"><span>🌐</span><span>DNS · Latency · Health checks</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>DNS as a Connection Quality Signal</h3>
+      <p>
+        Slow DNS resolution is often the root cause of "the internet feels slow" complaints
+        that are actually caused by 300ms DNS latency rather than low bandwidth. Enterprise
+        deployments with split-horizon DNS (different DNS results inside vs. outside the
+        corporate network) need automated verification to confirm clients get the right
+        internal IPs when on the corporate WLAN.
+      </p>
+
+      <div class="callout">
+        <strong>dnspython gives you full DNS control from Python.</strong><br>
+        Unlike <code>socket.getaddrinfo()</code> (which uses the OS resolver with caching
+        and no timing), <code>dnspython</code> sends raw DNS queries to specific servers
+        and measures round-trip time precisely. This lets you compare your DHCP-assigned
+        DNS server against public alternatives and detect captive portal DNS hijacking.
+      </div>
+
+      <h3>Canary Domain Testing</h3>
+      <p>
+        A <em>canary domain</em> is a well-known hostname that should always resolve
+        correctly on a properly functioning network. For enterprise WLAN testing, you
+        might use <code>google.com</code> (internet DNS), <code>corp-intranet.example.com</code>
+        (internal DNS), and <code>time.windows.com</code> (NTP). If any of these fail
+        to resolve, you have a specific, actionable DNS failure rather than a vague
+        "network not working" report.
+      </p>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — resolve(), benchmark_dns(), dns_health_check()</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>Day23_dns_testing.py</code>. Install dnspython first:
+        <code>pip install dnspython</code>.
+      </p>
+
+      <div class="step-label">Block 1 — resolve() with Latency Measurement</div>
+      <p>
+        <code>dns.resolver.Resolver</code> lets you configure which DNS server to query.
+        Wrapping it with <code>time.perf_counter()</code> gives nanosecond-precision
+        latency measurement — much more accurate than <code>time.time()</code>.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day23_dns_testing.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 23: DNS Resolution Testing
+# pip install dnspython
+# =============================================================
+
+import dns.resolver
+import dns.exception
+import time
+import statistics
+
+def resolve(hostname, server=None, record_type="A", timeout=5):
+    """
+    Resolve a hostname using a specific DNS server.
+    Returns: (answers: list, latency_ms: float, error: str or None)
+
+    Args:
+        hostname:    Domain name to resolve
+        server:      DNS server IP (None = use system default)
+        record_type: DNS record type ('A', 'AAAA', 'MX', 'TXT', etc.)
+        timeout:     Query timeout in seconds
+    """
+    resolver = dns.resolver.Resolver()
+    resolver.lifetime = timeout
+    if server:
+        resolver.nameservers = [server]   # Override the DNS server
+
+    start = time.perf_counter()  # High-resolution timer
+    try:
+        answers = resolver.resolve(hostname, record_type)
+        latency = (time.perf_counter() - start) * 1000  # Convert to ms
+        ips = [str(r) for r in answers]
+        return ips, round(latency, 2), None
+
+    except dns.exception.Timeout:
+        latency = (time.perf_counter() - start) * 1000
+        return [], round(latency, 2), "TIMEOUT"
+
+    except dns.resolver.NXDOMAIN:
+        latency = (time.perf_counter() - start) * 1000
+        return [], round(latency, 2), "NXDOMAIN (domain not found)"
+
+    except Exception as e:
+        latency = (time.perf_counter() - start) * 1000
+        return [], round(latency, 2), str(e)
+
+# Quick test
+ips, latency, err = resolve("google.com")
+print(f"google.com → {ips}  ({latency} ms)  err={err}")</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — benchmark_dns() — Four Servers in Parallel</div>
+      <p>
+        Comparing DNS servers requires querying them under identical conditions.
+        Using <code>threading</code> to send all queries simultaneously eliminates
+        timing bias — results are comparable because they happen at the same moment.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">import threading
+
+DNS_SERVERS = {
+    "Google":     "8.8.8.8",
+    "Cloudflare": "1.1.1.1",
+    "OpenDNS":    "208.67.222.222",
+    "Quad9":      "9.9.9.9",
+}
+
+def benchmark_dns(hostname, repeat=5):
+    """
+    Benchmark multiple DNS servers by resolving the same hostname
+    repeatedly and computing average latency.
+
+    Args:
+        hostname: Domain to use for the benchmark
+        repeat:   Number of queries per server (more = more accurate average)
+    """
+    results = {}
+
+    def query_server(name, server_ip):
+        """Thread worker: query the server `repeat` times."""
+        latencies = []
+        for _ in range(repeat):
+            _, latency_ms, err = resolve(hostname, server=server_ip)
+            if not err:
+                latencies.append(latency_ms)
+            time.sleep(0.1)   # Brief pause between queries (polite behaviour)
+
+        if latencies:
+            results[name] = {
+                "server":  server_ip,
+                "avg_ms":  round(statistics.mean(latencies), 1),
+                "min_ms":  round(min(latencies), 1),
+                "max_ms":  round(max(latencies), 1),
+                "success": len(latencies),
+            }
+        else:
+            results[name] = {"server": server_ip, "avg_ms": None,
+                             "success": 0, "error": "All queries failed"}
+
+    # Launch all server queries in parallel threads
+    threads = [threading.Thread(target=query_server, args=(name, ip))
+               for name, ip in DNS_SERVERS.items()]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()   # Wait for all threads to complete
+
+    # Print results sorted by average latency
+    print(f"\n[DNS Benchmark] hostname='{hostname}'  ({repeat} queries each)")
+    for name, r in sorted(results.items(), key=lambda x: x[1].get("avg_ms") or 9999):
+        if r.get("avg_ms"):
+            print(f"  {name:12s} {r['server']:15s}  avg={r['avg_ms']:6.1f}ms  "
+                  f"min={r['min_ms']:5.1f}  max={r['max_ms']:5.1f}  ok={r['success']}/{repeat}")
+        else:
+            print(f"  {name:12s} {r['server']:15s}  FAILED")
+    return results
+
+benchmark_dns("google.com", repeat=3)</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — dns_health_check() with Canary Domains</div>
+      <p>
+        A health check tests a set of canary domains that represent different DNS zones:
+        public internet, corporate internal, and NTP. Any failure is a specific,
+        actionable data point.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">CANARY_DOMAINS = [
+    "google.com",           # Public internet DNS
+    "cloudflare.com",       # Public CDN
+    "github.com",           # Developer tools
+    "time.windows.com",     # NTP (should always resolve)
+]
+
+def dns_health_check(dns_server=None, canary_domains=None):
+    """
+    Check DNS health by resolving a set of canary domains.
+    Returns: (healthy: bool, results: list of dicts)
+    """
+    domains = canary_domains or CANARY_DOMAINS
+    results = []
+    all_ok  = True
+
+    print(f"\n[DNS Health Check] server={dns_server or 'system default'}")
+
+    for domain in domains:
+        ips, latency, err = resolve(domain, server=dns_server)
+        ok = (err is None and len(ips) &gt; 0)
+        if not ok:
+            all_ok = False
+
+        results.append({
+            "domain":  domain,
+            "passed":  ok,
+            "ips":     ips,
+            "latency": latency,
+            "error":   err
+        })
+
+        icon = "✓" if ok else "✗"
+        print(f"  [{icon}] {domain:30s}  {latency:6.1f}ms  {ips[0] if ips else err}")
+
+    print(f"\n  Overall: {'HEALTHY' if all_ok else 'DEGRADED'}")
+    return all_ok, results
+
+ok, report = dns_health_check()</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>The benchmark compares four DNS servers and the health check validates all canary domains.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ python Day23_dns_testing.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre>google.com → <span class="t-green">['142.250.185.46']</span>  (12.4 ms)  err=None
+
+<span class="t-blue">[DNS Benchmark] hostname='google.com'  (3 queries each)</span>
+  Cloudflare   1.1.1.1          avg=  8.2ms  min=  7.1  max= 10.4  ok=3/3
+  Google       8.8.8.8          avg= 12.1ms  min= 11.2  max= 13.8  ok=3/3
+  Quad9        9.9.9.9          avg= 15.4ms  min= 14.1  max= 17.2  ok=3/3
+  OpenDNS      208.67.222.222   avg= 22.7ms  min= 21.0  max= 25.3  ok=3/3
+
+<span class="t-green">[DNS Health Check]</span> server=system default
+  [<span class="t-green">✓</span>] google.com                       12.4ms  142.250.185.46
+  [<span class="t-green">✓</span>] cloudflare.com                    9.1ms   104.16.132.229
+  [<span class="t-green">✓</span>] github.com                        18.3ms  140.82.121.4
+  [<span class="t-green">✓</span>] time.windows.com                  14.7ms  20.101.57.9
+
+  Overall: <span class="t-green">HEALTHY</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Add captive portal detection and split-horizon DNS testing:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Write <code>detect_captive_portal()</code> that
+          detects a captive portal (hotel/airport login page) by resolving
+          <code>captive.apple.com</code> and checking if the returned IP matches
+          Apple's expected address. If it returns a different IP, a captive portal
+          is redirecting DNS — log it as "CAPTIVE PORTAL DETECTED."</li>
+        <li><strong>Task 2:</strong> Write <code>test_split_horizon(internal_domain,
+          expected_internal_ip, public_dns="8.8.8.8")</code> that resolves the same
+          domain against both the DHCP-assigned DNS server and a public one. If the
+          results differ, the internal DNS is serving private addresses — log this
+          as "Split-horizon DNS confirmed: PASS."</li>
+        <li><strong>Bonus:</strong> Add latency trending — call <code>resolve()</code>
+          10 times over 30 seconds and compute the 95th percentile latency. Enterprise
+          networks should have DNS P95 &lt; 50ms. Report it as PASS/FAIL against this
+          threshold.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> For P95: sort the latency list and take the value at
+        index <code>int(len(latencies) * 0.95)</code>. With 10 samples that's index 9
+        (the max). With 100 samples it's index 95. More samples = more accurate
+        percentile estimates.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#d29922; margin-bottom:4px;">
+            Up Next · Day 24
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            RSSI Monitoring &amp; Logging
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            Static RSSI checks are good. Continuous RSSI monitoring is better.
+            Tomorrow you'll build a rolling-average RSSI monitor with threshold alerts
+            and CSV logging — the foundation of roaming trigger testing and coverage
+            map automation.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->
+

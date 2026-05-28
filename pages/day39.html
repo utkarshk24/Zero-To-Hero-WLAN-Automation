@@ -1,0 +1,195 @@
+<div class="day-content">
+
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-tag">Day 39</span>
+      <span class="phase-tag phase-5">Phase 5 — Advanced Scenarios &amp; CI/CD</span>
+    </div>
+    <h1 class="day-hero-title">Secrets &amp; Environment Configuration</h1>
+    <p class="day-hero-sub">
+      Wi-Fi passwords, AP credentials, and SMTP keys don't belong in code. Today you'll
+      master the right way to manage secrets in Python automation — <code>python-dotenv</code>
+      locally, GitHub Secrets in CI, and runtime validation so tests fail fast with a clear
+      message if config is missing.
+    </p>
+    <div class="day-hero-tags">
+      <span class="tag">python-dotenv</span>
+      <span class="tag">.env files</span>
+      <span class="tag">GitHub Secrets</span>
+      <span class="tag">os.environ</span>
+      <span class="tag">Config Validation</span>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h2 class="section-title">1 — Using python-dotenv for Local Development</h2>
+    <div class="code-block-wrapper">
+      <div class="code-block-header">
+        <span class="code-lang">python</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <pre><code class="language-python">
+# pip install python-dotenv
+
+# .env file (NEVER commit this to git!)
+# WIFI_SSID=CorpWiFi
+# WIFI_PASSWORD=SuperSecret123
+# AP_ADMIN_USER=admin
+# AP_ADMIN_PASS=admin_pass
+# TEST_ENV=local
+# MIN_RSSI=-70
+
+from dotenv import load_dotenv
+import os
+
+load_dotenv()   # reads .env and injects into os.environ
+
+ssid     = os.environ["WIFI_SSID"]
+password = os.environ["WIFI_PASSWORD"]
+min_rssi = int(os.environ.get("MIN_RSSI", "-70"))   # with default
+
+print(f"SSID: {ssid}")
+print(f"Min RSSI: {min_rssi} dBm")
+print(f"Environment: {os.environ.get('TEST_ENV', 'unknown')}")
+      </code></pre>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h2 class="section-title">2 — .gitignore: Never Commit Secrets</h2>
+    <div class="code-block-wrapper">
+      <div class="code-block-header">
+        <span class="code-lang">bash</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <pre><code class="language-bash">
+# .gitignore — add these BEFORE your first commit
+.env
+.env.*
+*.env
+secrets/
+credentials.json
+ap_passwords.yaml
+
+# Check if you've accidentally staged a secret file:
+git status --short | grep "\.env"
+
+# If .env was already committed — remove it:
+git rm --cached .env
+echo ".env" >> .gitignore
+git commit -m "Remove .env from tracking"
+      </code></pre>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h2 class="section-title">3 — GitHub Secrets for CI</h2>
+    <div class="code-block-wrapper">
+      <div class="code-block-header">
+        <span class="code-lang">bash</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <pre><code class="language-bash">
+# In GitHub repo: Settings → Secrets and variables → Actions
+# Add secrets: WIFI_SSID, WIFI_PASSWORD, MIN_RSSI
+
+# Use them in workflow:
+# .github/workflows/test.yml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run WLAN tests
+        env:
+          WIFI_SSID:     ${{ secrets.WIFI_SSID }}
+          WIFI_PASSWORD: ${{ secrets.WIFI_PASSWORD }}
+          MIN_RSSI:      ${{ secrets.MIN_RSSI }}
+        run: pytest tests/ -m "not live" -v
+      </code></pre>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h2 class="section-title">4 — Config Validation at Test Startup</h2>
+    <div class="code-block-wrapper">
+      <div class="code-block-header">
+        <span class="code-lang">python</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <pre><code class="language-python">
+# config.py — centralised config loader with validation
+
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+REQUIRED_VARS = ["WIFI_SSID", "WIFI_PASSWORD"]
+OPTIONAL_VARS = {
+    "MIN_RSSI":     "-70",
+    "TEST_ENV":     "local",
+    "AP_INTERFACE": "wlan0",
+    "IPERF_SERVER": "192.168.1.100",
+}
+
+def load_config():
+    """Load and validate all required environment variables."""
+    missing = [v for v in REQUIRED_VARS if not os.environ.get(v)]
+    if missing:
+        raise EnvironmentError(
+            f"Missing required environment variables: {missing}\n"
+            f"Copy .env.example to .env and fill in the values."
+        )
+    config = {v: os.environ[v] for v in REQUIRED_VARS}
+    config.update({k: os.environ.get(k, default) for k, default in OPTIONAL_VARS.items()})
+    config["MIN_RSSI"] = int(config["MIN_RSSI"])
+    return config
+
+
+# conftest.py
+# @pytest.fixture(scope="session")
+# def config():
+#     return load_config()   # fails immediately if vars are missing
+      </code></pre>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h2 class="section-title">5 — .env.example: Document Your Config</h2>
+    <div class="code-block-wrapper">
+      <div class="code-block-header">
+        <span class="code-lang">bash</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <pre><code class="language-bash">
+# .env.example — commit this! It documents config without exposing values.
+
+WIFI_SSID=your_ssid_here
+WIFI_PASSWORD=your_password_here
+AP_ADMIN_USER=admin
+AP_ADMIN_PASS=change_me
+MIN_RSSI=-70
+TEST_ENV=local
+AP_INTERFACE=wlan0
+IPERF_SERVER=192.168.1.100
+SMTP_FROM=alerts@yourcompany.com
+SMTP_PASSWORD=app_password_here
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+      </code></pre>
+    </div>
+  </div>
+
+  <div class="exercise-card">
+    <div class="exercise-header">
+      <span class="exercise-icon">🏋️</span>
+      <h3 class="exercise-title">Day 39 Exercise</h3>
+    </div>
+    <p>Refactor your entire test suite to load all configuration from environment variables
+    using the <code>load_config()</code> pattern above. Remove every hardcoded credential,
+    IP address, and threshold from your test files. Add a startup check that prints
+    "Config OK" or raises with a list of missing vars.</p>
+  </div>
+
+</div>

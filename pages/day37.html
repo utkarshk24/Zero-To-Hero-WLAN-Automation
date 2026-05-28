@@ -1,0 +1,176 @@
+<div class="day-content">
+
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-tag">Day 37</span>
+      <span class="phase-tag phase-5">Phase 5 — Advanced Scenarios &amp; CI/CD</span>
+    </div>
+    <h1 class="day-hero-title">Introduction to GitHub Actions CI/CD</h1>
+    <p class="day-hero-sub">
+      Your test suite runs manually today. Tomorrow it runs automatically on every commit.
+      Today you'll write GitHub Actions workflow files that install your dependencies, run
+      PyTest, and publish reports — so every push to your repo is automatically tested.
+    </p>
+    <div class="day-hero-tags">
+      <span class="tag">GitHub Actions</span>
+      <span class="tag">Workflow YAML</span>
+      <span class="tag">Jobs &amp; Steps</span>
+      <span class="tag">Artifacts</span>
+      <span class="tag">Triggers</span>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h2 class="section-title">1 — Your First Workflow File</h2>
+    <div class="code-block-wrapper">
+      <div class="code-block-header">
+        <span class="code-lang">bash</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <pre><code class="language-bash">
+# .github/workflows/test.yml
+
+name: WLAN Automation Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests (unit tests only — no hardware needed)
+        run: pytest -m "not live" -v --html=reports/report.html --self-contained-html
+
+      - name: Upload HTML report
+        uses: actions/upload-artifact@v4
+        if: always()   # upload even if tests fail
+        with:
+          name: test-report-${{ github.run_number }}
+          path: reports/report.html
+      </code></pre>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h2 class="section-title">2 — Workflow with Matrix (Multiple Python Versions)</h2>
+    <div class="code-block-wrapper">
+      <div class="code-block-header">
+        <span class="code-lang">bash</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <pre><code class="language-bash">
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install and test
+        run: |
+          pip install -r requirements.txt
+          pytest -m "not live" -v
+      </code></pre>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h2 class="section-title">3 — Publishing Allure Reports to GitHub Pages</h2>
+    <div class="code-block-wrapper">
+      <div class="code-block-header">
+        <span class="code-lang">bash</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <pre><code class="language-bash">
+      - name: Run tests with Allure
+        run: pytest -m "not live" --alluredir=allure-results
+
+      - name: Generate Allure report
+        uses: simple-elf/allure-report-action@master
+        if: always()
+        with:
+          allure_results: allure-results
+          allure_history: allure-history
+
+      - name: Deploy Allure report to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        if: always()
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: allure-history
+      </code></pre>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h2 class="section-title">4 — Useful GitHub Actions Patterns</h2>
+    <div class="code-block-wrapper">
+      <div class="code-block-header">
+        <span class="code-lang">bash</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <pre><code class="language-bash">
+# Run only on specific file changes (skip CI for docs changes)
+on:
+  push:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'requirements.txt'
+
+# Pass secrets as environment variables (never hardcode credentials)
+      - name: Run with credentials
+        env:
+          WIFI_PASSWORD: ${{ secrets.CORP_WIFI_PASSWORD }}
+          AP_INVENTORY:  ${{ secrets.AP_INVENTORY_PATH }}
+        run: pytest
+
+# Cache pip dependencies (faster CI runs)
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+      </code></pre>
+    </div>
+  </div>
+
+  <div class="exercise-card">
+    <div class="exercise-header">
+      <span class="exercise-icon">🏋️</span>
+      <h3 class="exercise-title">Day 37 Exercise</h3>
+    </div>
+    <p>Create a <code>.github/workflows/test.yml</code> for your WLAN suite that runs
+    <code>pytest -m "not live"</code> on every push, uploads the HTML report as an artifact,
+    and posts a Slack notification with the pass/fail count using a webhook secret.
+    Hint: use <code>slackapi/slack-github-action</code>.</p>
+  </div>
+
+</div>

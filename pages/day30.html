@@ -1,0 +1,305 @@
+<!-- ============================================================
+     Day 30: Parametrized Testing — 50 SSIDs × 1 Script
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 30</span>
+      <span class="phase-badge" style="background:rgba(163,113,247,0.15); color:#a371f7; border:1px solid rgba(163,113,247,0.3);">
+        Phase 4 · Test Frameworks
+      </span>
+    </div>
+    <h1>Parametrized Testing —<br>50 SSIDs × 1 Test Function</h1>
+    <p>
+      Your WLAN fleet has 50 APs. Without parametrization, you'd write 50 identical
+      test functions. With <code>@pytest.mark.parametrize</code> and a CSV file,
+      you write one test function that runs 50 independent test cases — each with
+      its own pass/fail, its own name, and its own failure message.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~50 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>pytest · csv</span></div>
+      <div class="hero-stat"><span>🔄</span><span>@parametrize · ids · csv loading</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>The Fleet Testing Problem</h3>
+      <p>
+        An enterprise WLAN deployment has dozens to hundreds of APs. Your acceptance
+        test requires verifying each AP individually: correct SSID, correct channel,
+        correct security, RSSI above threshold. Writing one test per AP is unmaintainable —
+        adding a new AP means editing test code.
+      </p>
+
+      <div class="callout">
+        <strong>Parametrization drives test data from external sources.</strong><br>
+        Load AP configurations from a CSV file, a JSON inventory, or a database.
+        Each row becomes a test case with its own name and failure context.
+        When you add a new AP to the inventory, it automatically appears as a new
+        test case — no code changes required.
+      </div>
+
+      <h3>The ids Parameter</h3>
+      <p>
+        By default, pytest names parametrized cases <code>test_func[param0-param1]</code>.
+        With the <code>ids</code> parameter, you get meaningful names like
+        <code>test_rssi[CorpWifi-5G]</code> — essential for reading CI reports when
+        a specific AP fails.
+      </p>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — @parametrize, ids, and Loading from CSV</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>test_parametrized.py</code>. The parametrize examples progress from
+        simple inline data to CSV-driven fleet testing.
+      </p>
+
+      <div class="step-label">Block 1 — Basic @parametrize with ids</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">test_parametrized.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 30: Parametrized WLAN Tests
+# Run with: pytest test_parametrized.py -v
+# =============================================================
+
+import pytest
+import csv
+from pathlib import Path
+
+def classify_signal(rssi):
+    if rssi &gt;= -50: return "Excellent"
+    if rssi &gt;= -60: return "Good"
+    if rssi &gt;= -70: return "Fair"
+    return "Poor"
+
+# ── Block 1: Simple parametrize with explicit ids ──────────────
+
+@pytest.mark.parametrize("rssi,expected", [
+    (-42, "Excellent"),
+    (-55, "Good"),
+    (-65, "Fair"),
+    (-80, "Poor"),
+    (-50, "Excellent"),   # Boundary: -50 = Excellent
+    (-51, "Good"),        # Boundary: -51 = Good
+], ids=[
+    "excellent",
+    "good",
+    "fair",
+    "poor",
+    "boundary_excellent",
+    "boundary_good",
+])
+def test_classify_rssi(rssi, expected):
+    """RSSI classification must map each dBm range to the correct label."""
+    result = classify_signal(rssi)
+    assert result == expected, f"classify_signal({rssi}) = '{result}', expected '{expected}'"</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — Multi-Parameter AP Fleet Test</div>
+      <p>
+        When parametrizing with multiple columns (like AP properties), each test case
+        is a tuple of values. The <code>ids</code> list assigns meaningful names based
+        on the AP's SSID.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># AP fleet data: (ssid, bssid, rssi, channel, security)
+AP_FLEET = [
+    ("CorpWifi-5G",  "AA:BB:CC:01:02:03", -52, 36,  "WPA2"),
+    ("CorpWifi-2G",  "AA:BB:CC:01:02:04", -68, 6,   "WPA2"),
+    ("GuestWifi",    "AA:BB:CC:01:02:05", -71, 11,  "WPA2"),
+    ("PrinterNet",   "AA:BB:CC:01:02:06", -55, 1,   "WPA2"),
+    ("IoTNetwork",   "AA:BB:CC:01:02:07", -60, 6,   "WPA2"),
+]
+
+@pytest.mark.parametrize(
+    "ssid, bssid, rssi, channel, security",
+    AP_FLEET,
+    ids=[ap[0] for ap in AP_FLEET]   # Use SSID as the test name
+)
+def test_ap_rssi_compliance(ssid, bssid, rssi, channel, security):
+    """Each AP must have RSSI above -75 dBm."""
+    assert rssi &gt;= -75, f"AP '{ssid}' ({bssid}) has RSSI {rssi} dBm — below -75 dBm threshold"
+
+@pytest.mark.parametrize(
+    "ssid, bssid, rssi, channel, security",
+    AP_FLEET,
+    ids=[ap[0] for ap in AP_FLEET]
+)
+def test_ap_security_compliance(ssid, bssid, rssi, channel, security):
+    """Each AP must use WPA2 or WPA3 — no open or WEP networks allowed."""
+    approved = {"WPA2", "WPA3", "WPA2/WPA3"}
+    assert security in approved, (
+        f"AP '{ssid}' uses '{security}' — not in approved security types {approved}"
+    )</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — Loading Test Cases from CSV</div>
+      <p>
+        When your fleet grows to 50+ APs, hardcoding them in test files becomes
+        impractical. Loading from CSV means your inventory and your tests are the
+        same source of truth — update the CSV, tests update automatically.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def load_ap_params_from_csv(csv_path):
+    """
+    Load AP test parameters from a CSV file.
+    Returns a list of pytest.param objects with SSID as the test ID.
+    """
+    params = []
+    try:
+        with open(csv_path) as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                params.append(pytest.param(
+                    row["ssid"],
+                    row["bssid"],
+                    int(row["rssi_dbm"]),
+                    int(row["channel"]),
+                    row["security"],
+                    id=row["ssid"]   # Named test case
+                ))
+    except FileNotFoundError:
+        pass   # No CSV yet — parametrize with empty list (0 tests)
+    return params
+
+# Load from CSV (falls back to empty list if file doesn't exist)
+CSV_PATH = Path("test_results.csv")
+csv_params = load_ap_params_from_csv(CSV_PATH)
+
+@pytest.mark.parametrize(
+    "ssid, bssid, rssi, channel, security",
+    csv_params or [pytest.param("demo", "AA:BB:CC", -60, 6, "WPA2", id="demo")]
+)
+def test_fleet_from_csv(ssid, bssid, rssi, channel, security):
+    """Fleet test loaded from CSV — one test case per AP row."""
+    assert rssi &gt;= -80, f"'{ssid}' RSSI {rssi} dBm"
+    assert security in {"WPA2", "WPA3"}, f"'{ssid}' security '{security}'"</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>Each AP appears as a separate named test case. The SSID-based IDs make failures immediately clear.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ pytest test_parametrized.py -v</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-dim">collected 22 items</span>
+
+test_parametrized.py::<span class="t-green">test_classify_rssi[excellent]                    PASSED</span>
+test_parametrized.py::<span class="t-green">test_classify_rssi[good]                         PASSED</span>
+test_parametrized.py::<span class="t-green">test_classify_rssi[boundary_excellent]           PASSED</span>
+test_parametrized.py::<span class="t-green">test_ap_rssi_compliance[CorpWifi-5G]             PASSED</span>
+test_parametrized.py::<span class="t-green">test_ap_rssi_compliance[CorpWifi-2G]             PASSED</span>
+test_parametrized.py::<span class="t-green">test_ap_rssi_compliance[GuestWifi]               PASSED</span>
+test_parametrized.py::<span class="t-green">test_ap_security_compliance[CorpWifi-5G]         PASSED</span>
+test_parametrized.py::<span class="t-green">test_ap_security_compliance[GuestWifi]           PASSED</span>
+<span class="t-dim">...and 14 more...</span>
+
+<span class="t-dim">========================= 22 passed in 0.21s =========================</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Extend parametrized testing with indirect fixtures and conditional marks:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Create a CSV file <code>ap_fleet.csv</code> with
+          columns <code>ssid,bssid,rssi_dbm,channel,security,band</code> containing at
+          least 8 APs (mix of 2.4 GHz and 5 GHz). Load it with
+          <code>load_ap_params_from_csv()</code> and run the full fleet through both
+          RSSI and security tests.</li>
+        <li><strong>Task 2:</strong> Add a <code>band</code> column to the CSV and write
+          a test <code>test_5ghz_channels_correct()</code> that verifies 5 GHz APs use
+          channels ≥ 36 and 2.4 GHz APs use channels 1-11.</li>
+        <li><strong>Bonus:</strong> Use <code>pytest.param(..., marks=pytest.mark.slow)</code>
+          on specific AP entries in the CSV-loaded data to mark them as slow tests,
+          then run with <code>-m "not slow"</code> to skip them in quick CI runs.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> To add marks to individual CSV rows, extend
+        <code>load_ap_params_from_csv()</code> to check a <code>slow</code> column
+        in the CSV. If the value is <code>true</code>, wrap with
+        <code>pytest.param(..., marks=pytest.mark.slow)</code>. The rest of the rows
+        get no extra marks.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#a371f7; margin-bottom:4px;">
+            Up Next · Day 31
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            HTML Reports with pytest-html
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            Terminal output disappears when the CI job ends. Tomorrow you'll generate
+            beautiful, self-contained HTML reports with pass/fail tables, timestamps,
+            custom metadata, and screenshots — reports you can share with stakeholders.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

@@ -1,0 +1,183 @@
+<div class="day-content">
+
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-tag">Day 40</span>
+      <span class="phase-tag phase-5">Final Capstone — Advanced Scenarios &amp; CI/CD</span>
+    </div>
+    <h1 class="day-hero-title">Final Capstone: Enterprise WLAN Automation Framework</h1>
+    <p class="day-hero-sub">
+      40 days of learning converges here. You'll build a complete, production-ready enterprise
+      WLAN automation framework — configurable, portable, CI-integrated, and documented.
+      This is the project you put in your portfolio.
+    </p>
+    <div class="day-hero-tags">
+      <span class="tag">Final Capstone</span>
+      <span class="tag">Full Framework</span>
+      <span class="tag">Portfolio Ready</span>
+      <span class="tag">CI/CD</span>
+      <span class="tag">Production Grade</span>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h2 class="section-title">Framework Architecture</h2>
+    <div class="code-block-wrapper">
+      <div class="code-block-header">
+        <span class="code-lang">bash</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <pre><code class="language-bash">
+enterprise-wlan-framework/
+├── .env.example                 # config template
+├── .github/
+│   └── workflows/
+│       ├── ci.yml               # on-push unit tests
+│       └── nightly.yml          # nightly regression + reports
+├── pytest.ini                   # unified test settings
+├── requirements.txt             # pinned dependencies
+├── README.md
+├── src/
+│   ├── config.py                # env-based config loader
+│   ├── wlan_utils.py            # signal, channel, BSSID helpers
+│   ├── scanner.py               # cross-platform SSID scanner
+│   ├── connector.py             # WPA2/WPA3 connect/disconnect
+│   ├── validator.py             # DHCP, DNS, ping validation
+│   ├── monitor.py               # RSSI monitoring + alerts
+│   └── reporter.py              # CSV + JSON + trend tracking
+├── tests/
+│   ├── conftest.py              # session fixtures + metadata
+│   ├── test_signal.py           # RSSI and quality tests
+│   ├── test_security.py         # rogue AP and compliance tests
+│   ├── test_channels.py         # channel plan tests
+│   ├── test_connectivity.py     # DHCP/DNS/throughput tests
+│   └── test_roaming.py          # 802.11r/k/v latency tests
+└── reports/                     # HTML, Allure, CSV outputs
+      </code></pre>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h2 class="section-title">The Core Framework Module (src/validator.py)</h2>
+    <div class="code-block-wrapper">
+      <div class="code-block-header">
+        <span class="code-lang">python</span>
+        <button class="copy-btn">Copy</button>
+      </div>
+      <pre><code class="language-python">
+"""validator.py — The heart of the framework."""
+
+import json, datetime, sys
+from config import load_config
+from scanner import scan_networks, find_ssid
+from connector import connect_wpa2, disconnect
+from wlan_utils import validate_dhcp, dns_health_check
+
+class WLANValidator:
+    def __init__(self):
+        self.config  = load_config()
+        self.results = []
+        self.start   = datetime.datetime.now()
+
+    def run(self, ssid=None, password=None):
+        ssid     = ssid     or self.config["WIFI_SSID"]
+        password = password or self.config["WIFI_PASSWORD"]
+
+        print(f"\n{'='*60}")
+        print(f" WLAN Validation Framework")
+        print(f" Target: {ssid}  |  {self.start.strftime('%Y-%m-%d %H:%M')}")
+        print(f"{'='*60}\n")
+
+        stages = [
+            ("Scan",          self._stage_scan,    ssid),
+            ("Connect",       self._stage_connect, ssid, password),
+            ("DHCP",          self._stage_dhcp),
+            ("DNS",           self._stage_dns),
+            ("Connectivity",  self._stage_ping),
+        ]
+        for name, fn, *args in stages:
+            result = fn(*args)
+            result["stage"] = name
+            self.results.append(result)
+            icon = "✓" if result["passed"] else "✗"
+            detail = result.get("detail", "")
+            print(f"  [{icon}] {name:15s}  {detail}")
+
+        self._save_report()
+        passed = all(r["passed"] for r in self.results)
+        print(f"\n{'PASS' if passed else 'FAIL'}: {sum(r['passed'] for r in self.results)}/{len(self.results)} stages")
+        return 0 if passed else 1
+
+    def _stage_scan(self, ssid):
+        nets = scan_networks()
+        match = find_ssid(ssid, nets)
+        rssi  = match[0]["rssi"] if match else None
+        return {"passed": bool(match) and (rssi or 0) >= self.config["MIN_RSSI"],
+                "detail": f"RSSI={rssi} dBm, found={len(match)} instance(s)"}
+
+    def _stage_connect(self, ssid, password):
+        ok, elapsed, err = connect_wpa2(ssid, password)
+        return {"passed": ok, "detail": f"{elapsed:.2f}s  {err or ''}"}
+
+    def _stage_dhcp(self):
+        ok = validate_dhcp(self.config["AP_INTERFACE"])
+        return {"passed": ok, "detail": "IP assigned" if ok else "No DHCP IP"}
+
+    def _stage_dns(self):
+        ok = dns_health_check()
+        return {"passed": ok, "detail": "DNS resolves" if ok else "DNS failed"}
+
+    def _stage_ping(self):
+        import subprocess, netifaces
+        gw = netifaces.gateways().get("default", {}).get(2, [None])[0]
+        ok = subprocess.run(["ping", "-c", "3", gw or "8.8.8.8"],
+                            capture_output=True).returncode == 0
+        return {"passed": ok, "detail": f"Gateway {gw}"}
+
+    def _save_report(self):
+        report = {
+            "timestamp": self.start.isoformat(),
+            "stages":    self.results,
+            "passed":    all(r["passed"] for r in self.results),
+        }
+        path = f"reports/validation_{self.start.strftime('%Y%m%d_%H%M%S')}.json"
+        with open(path, "w") as f:
+            json.dump(report, f, indent=2)
+        print(f"\n  Report: {path}")
+
+
+if __name__ == "__main__":
+    sys.exit(WLANValidator().run())
+      </code></pre>
+    </div>
+  </div>
+
+  <div class="section-card" style="border: 2px solid; border-image: linear-gradient(135deg,#58a6ff,#3fb950,#d29922,#a371f7,#f85149) 1; padding: 24px; border-radius: 8px;">
+    <h2 class="section-title" style="background: linear-gradient(135deg,#58a6ff,#a371f7); -webkit-background-clip:text; -webkit-text-fill-color:transparent; font-size:1.4rem;">🎓 Course Complete — Zero to Hero!</h2>
+    <p style="color:#c9d1d9; margin-top:12px; line-height:1.9;">You've completed all 40 days. Here's what you've built:</p>
+    <ul style="color:#c9d1d9; margin: 12px 0 0 20px; line-height: 2.2;">
+      <li><strong style="color:#58a6ff;">Phase 1</strong> — Python foundations + config parsing + logging</li>
+      <li><strong style="color:#3fb950;">Phase 2</strong> — OS control, Scapy, monitor mode, channel hopping</li>
+      <li><strong style="color:#d29922;">Phase 3</strong> — Connections, DHCP, DNS, RSSI monitoring, timing</li>
+      <li><strong style="color:#a371f7;">Phase 4</strong> — PyTest, fixtures, parametrize, HTML + Allure reports</li>
+      <li><strong style="color:#f85149;">Phase 5</strong> — OTA capture, throughput, roaming, CI/CD, secrets</li>
+    </ul>
+    <p style="color:#8b949e; margin-top:16px; font-style:italic;">
+      You started as a manual WLAN tester. You're leaving as a WLAN automation engineer.
+      The tools you've built are real, portable, and production-ready.
+      Keep building, keep testing, keep automating.
+    </p>
+  </div>
+
+  <div class="exercise-card">
+    <div class="exercise-header">
+      <span class="exercise-icon">🏆</span>
+      <h3 class="exercise-title">Final Challenge: Open Source It</h3>
+    </div>
+    <p>Package your framework as a proper Python project: add <code>setup.py</code> or
+    <code>pyproject.toml</code>, a <code>README.md</code> with installation instructions and
+    a demo GIF, and publish it to GitHub with the <code>.github/workflows/ci.yml</code>
+    badge in the README. Share the link — you've earned it.</p>
+  </div>
+
+</div>

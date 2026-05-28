@@ -1,0 +1,331 @@
+<!-- ============================================================
+     Day 7: JSON & YAML — Config File Parsing
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 07</span>
+      <span class="phase-badge" style="background:rgba(88,166,255,0.15); color:#58a6ff; border:1px solid rgba(88,166,255,0.3);">
+        Phase 1 · Fundamentals
+      </span>
+    </div>
+    <h1>JSON &amp; YAML —<br>Config File Parsing for WLAN Automation</h1>
+    <p>
+      Real test configurations are nested structures — AP inventories, RSSI thresholds,
+      and security requirements organised in trees, not flat key=value lines. Today you'll
+      parse JSON AP inventories and YAML test configs, then validate live scan results
+      against declared expectations.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~50 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>json · PyYAML</span></div>
+      <div class="hero-stat"><span>🗂</span><span>Nested config structures</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>When key=value Isn't Enough</h3>
+      <p>
+        Yesterday's config file works for a single AP. But a production WLAN test suite
+        might cover 50 APs, each with different SSIDs, security types, expected channels,
+        and minimum RSSI thresholds per location. A flat <code>KEY=VALUE</code> file can't
+        represent that hierarchy cleanly. You'd end up with names like
+        <code>AP1_SSID=CorpWifi</code>, <code>AP1_CHANNEL=36</code>, <code>AP2_SSID=...</code>
+        — a maintenance nightmare.
+      </p>
+
+      <div class="callout">
+        <strong>JSON and YAML are the industry standard for structured configuration.</strong><br>
+        JSON is the format of REST APIs and data exchange. YAML is the format of CI pipelines,
+        Kubernetes configs, and Ansible playbooks. Both parse into Python dicts and lists —
+        exactly the data structures you already know.
+      </div>
+
+      <h3>JSON vs. YAML — When to Use Each</h3>
+      <p>
+        <strong>JSON</strong> (<code>.json</code>) is strict, machine-generated, and universally
+        supported. Use it for AP inventories, test result data, and anything that travels over
+        a REST API. <strong>YAML</strong> (<code>.yaml</code>) is human-friendly, supports
+        comments, and is less verbose. Use it for test configuration files that engineers
+        edit by hand. Your automation framework will often use both: JSON for data, YAML for config.
+      </p>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — JSON Inventory &amp; YAML Config Validation</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>Day07_json_yaml.py</code>. You'll parse a JSON AP inventory,
+        load a YAML test config, then validate simulated scan results against both sources.
+      </p>
+
+      <div class="step-label">Block 1 — Parsing JSON with json.loads / json.dumps</div>
+      <p>
+        Python's built-in <code>json</code> module converts between JSON strings and Python
+        objects. <code>json.loads()</code> parses a string into a dict. <code>json.dumps()</code>
+        converts a dict back to a formatted JSON string. No installation needed.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day07_json_yaml.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 7: JSON & YAML — Config file parsing and validation
+# =============================================================
+
+import json
+import yaml    # pip install PyYAML
+from pathlib import Path
+
+# ── Block 1: JSON AP Inventory ───────────────────────────────
+
+AP_INVENTORY_JSON = """
+{
+  "site": "HQ-Floor-3",
+  "access_points": [
+    {"ssid": "CorpWifi-5G",  "bssid": "AA:BB:CC:01:02:03",
+     "channel": 36, "security": "WPA2", "min_rssi": -65},
+    {"ssid": "CorpWifi-2G",  "bssid": "AA:BB:CC:01:02:04",
+     "channel": 6,  "security": "WPA2", "min_rssi": -70},
+    {"ssid": "GuestWifi",    "bssid": "AA:BB:CC:01:02:05",
+     "channel": 11, "security": "Open", "min_rssi": -75}
+  ]
+}
+"""
+
+# json.loads() — parses a JSON string into a Python dict
+inventory = json.loads(AP_INVENTORY_JSON)
+
+print(f"[Inventory] Site: {inventory['site']}")
+print(f"[Inventory] APs configured: {len(inventory['access_points'])}")
+for ap in inventory["access_points"]:
+    print(f"  {ap['ssid']:20s} Ch{ap['channel']:3d}  {ap['security']:10s}  min RSSI: {ap['min_rssi']} dBm")
+
+# Save the inventory to a file (json.dump vs json.dumps — 'dump' = to file)
+inventory_path = Path("ap_inventory.json")
+with open(inventory_path, "w") as f:
+    json.dump(inventory, f, indent=2)   # indent=2 pretty-prints it
+print(f"\n[JSON] Saved inventory to {inventory_path}")</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — Loading YAML with yaml.safe_load</div>
+      <p>
+        Always use <code>yaml.safe_load()</code> — never <code>yaml.load()</code>. The unsafe
+        version can execute arbitrary Python code embedded in a YAML file (a security
+        vulnerability). <code>safe_load()</code> restricts parsing to plain data types only.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># ── Block 2: YAML Test Config ────────────────────────────────
+
+YAML_CONFIG = """
+# WLAN Test Suite Configuration
+test_name: "Phase 1 Validation"
+environment: staging
+thresholds:
+  min_rssi_dbm: -70
+  max_association_time_ms: 3000
+  required_security:
+    - WPA2
+    - WPA3
+scan:
+  timeout_seconds: 30
+  retry_count: 3
+  channels_2ghz: [1, 6, 11]
+  channels_5ghz: [36, 40, 44, 48]
+"""
+
+# yaml.safe_load() — parses YAML string to Python dict/list structure
+config = yaml.safe_load(YAML_CONFIG)
+
+print(f"\n[YAML Config] Test: {config['test_name']}")
+print(f"  Min RSSI      : {config['thresholds']['min_rssi_dbm']} dBm")
+print(f"  Max assoc time: {config['thresholds']['max_association_time_ms']} ms")
+print(f"  Required sec  : {config['thresholds']['required_security']}")
+print(f"  5 GHz channels: {config['scan']['channels_5ghz']}")
+
+# Save YAML config to file
+config_path = Path("test_config.yaml")
+config_path.write_text(YAML_CONFIG)
+print(f"[YAML] Config saved to {config_path}")</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — Validating Scan Results Against Config</div>
+      <p>
+        This is where JSON + YAML combine into real value. Load the expected AP configuration,
+        compare it against a simulated live scan, and report which APs passed or failed their
+        RSSI and security requirements.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># ── Block 3: Validate scan vs config ─────────────────────────
+
+# Simulated live scan results (what the adapter actually sees)
+LIVE_SCAN = [
+    {"ssid": "CorpWifi-5G", "bssid": "AA:BB:CC:01:02:03",
+     "rssi": -58, "security": "WPA2"},
+    {"ssid": "CorpWifi-2G", "bssid": "AA:BB:CC:01:02:04",
+     "rssi": -78, "security": "WPA2"},
+    # GuestWifi is absent from scan (AP may be down)
+]
+
+def validate_scan(inventory, live_scan, min_rssi):
+    """
+    Compare live scan results against the expected AP inventory.
+    Checks: AP presence, RSSI threshold, security type.
+    Returns list of (ssid, status, reason) tuples.
+    """
+    # Build a lookup dict from scan results for O(1) access
+    scan_lookup = {ap["ssid"]: ap for ap in live_scan}
+    results = []
+
+    for expected_ap in inventory["access_points"]:
+        ssid = expected_ap["ssid"]
+        found = scan_lookup.get(ssid)
+
+        if not found:
+            results.append((ssid, "FAIL", "AP not found in scan"))
+            continue
+
+        # Check RSSI threshold
+        if found["rssi"] &lt; min_rssi:
+            reason = f"RSSI {found['rssi']} dBm below threshold {min_rssi} dBm"
+            results.append((ssid, "FAIL", reason))
+            continue
+
+        results.append((ssid, "PASS", f"RSSI {found['rssi']} dBm OK"))
+
+    return results
+
+min_rssi = config["thresholds"]["min_rssi_dbm"]
+results = validate_scan(inventory, LIVE_SCAN, min_rssi)
+
+print("\n[Validation Results]")
+for ssid, status, reason in results:
+    icon = "✓" if status == "PASS" else "✗"
+    print(f"  [{icon} {status}] {ssid:20s}  {reason}")</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>The script loads configs, then validates the simulated scan — showing which APs pass and which fail.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ python Day07_json_yaml.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-green">[Inventory] Site: HQ-Floor-3</span>
+[Inventory] APs configured: 3
+  CorpWifi-5G          Ch 36  WPA2        min RSSI: -65 dBm
+  CorpWifi-2G          Ch  6  WPA2        min RSSI: -70 dBm
+  GuestWifi            Ch 11  Open        min RSSI: -75 dBm
+<span class="t-dim">[JSON] Saved inventory to ap_inventory.json</span>
+
+<span class="t-blue">[YAML Config] Test: Phase 1 Validation</span>
+  Min RSSI      : -70 dBm
+  Max assoc time: 3000 ms
+  Required sec  : ['WPA2', 'WPA3']
+  5 GHz channels: [36, 40, 44, 48]
+<span class="t-dim">[YAML] Config saved to test_config.yaml</span>
+
+<span class="t-dim">[Validation Results]</span>
+  [<span class="t-green">✓ PASS</span>] CorpWifi-5G           RSSI -58 dBm OK
+  [<span class="t-red">✗ FAIL</span>] CorpWifi-2G           RSSI -78 dBm below threshold -70 dBm
+  [<span class="t-red">✗ FAIL</span>] GuestWifi             AP not found in scan</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Extend the validation system to produce a full JSON report:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Modify <code>validate_scan()</code> to also check
+          that each found AP's security type matches the <code>required_security</code> list
+          in the YAML config. If it doesn't match, add it as a FAIL with reason
+          <code>"Security Open not in required [WPA2, WPA3]"</code>.</li>
+        <li><strong>Task 2:</strong> Write the validation results to a JSON file called
+          <code>validation_report.json</code> with fields: <code>site</code>,
+          <code>timestamp</code>, <code>total</code>, <code>passed</code>,
+          <code>failed</code>, and a <code>results</code> array.</li>
+        <li><strong>Bonus:</strong> Load <code>ap_inventory.json</code> from disk using
+          <code>json.load(f)</code> and <code>test_config.yaml</code> using
+          <code>yaml.safe_load(f)</code> so the script works without the embedded strings.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> <code>json.dump(obj, f, indent=2, default=str)</code> —
+        the <code>default=str</code> parameter converts any non-serialisable objects
+        (like <code>datetime</code> instances) to strings automatically.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#58a6ff; margin-bottom:4px;">
+            Up Next · Day 8
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Phase 1 Capstone: WLAN Config Parser &amp; Validator
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            You've learned environments, file I/O, JSON, and YAML. Tomorrow you combine
+            everything into a complete WLAN validation tool — JSON inventory, YAML thresholds,
+            simulated scan, full report to CSV and summary.txt.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

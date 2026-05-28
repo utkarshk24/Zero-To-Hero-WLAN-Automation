@@ -1,0 +1,324 @@
+<!-- ============================================================
+     Day 29: Fixtures & conftest.py
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 29</span>
+      <span class="phase-badge" style="background:rgba(163,113,247,0.15); color:#a371f7; border:1px solid rgba(163,113,247,0.3);">
+        Phase 4 · Test Frameworks
+      </span>
+    </div>
+    <h1>Fixtures &amp; conftest.py —<br>Shared Test Infrastructure</h1>
+    <p>
+      Fixtures are pytest's mechanism for setup and teardown — but they're far more
+      powerful than unittest's setUp/tearDown. They compose, they scope to function,
+      class, module, or session, and they clean up automatically via yield.
+      Today you'll build the conftest.py that powers your entire WLAN test suite.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~55 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>pytest</span></div>
+      <div class="hero-stat"><span>🔧</span><span>@pytest.fixture · yield · scope</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>The Problem Fixtures Solve</h3>
+      <p>
+        Without fixtures, every test function that needs scan data must call the scan
+        function itself. In a 50-test suite, that means 50 network scan calls — each
+        taking 3 seconds. Total: 150 seconds just for setup. With a session-scoped
+        fixture, the scan runs once, and all 50 tests share the result. Total: 3 seconds.
+      </p>
+
+      <div class="callout">
+        <strong>Fixtures with yield are context managers for test setup.</strong><br>
+        Code before <code>yield</code> is setup (runs before the test).
+        Code after <code>yield</code> is teardown (runs after the test, guaranteed).
+        The <code>scope</code> parameter controls how often the fixture runs:
+        <code>function</code> (every test), <code>class</code>, <code>module</code>,
+        or <code>session</code> (once for the entire test run).
+      </div>
+
+      <h3>conftest.py: The Shared Fixture Hub</h3>
+      <p>
+        <code>conftest.py</code> is a special pytest file that pytest automatically
+        discovers. Fixtures defined there are available to all tests in the same
+        directory and all subdirectories — no imports needed. Put your AP inventory,
+        scan data, interface management, and connection credentials here.
+      </p>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — @pytest.fixture, scope, yield, and conftest.py</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>conftest.py</code> in your test directory. Every test file in
+        the same folder automatically has access to these fixtures.
+      </p>
+
+      <div class="step-label">Block 1 — Basic @pytest.fixture with scope</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">conftest.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# conftest.py — Shared fixtures for the entire WLAN test suite
+# pytest discovers this file automatically — no imports needed
+# =============================================================
+
+import pytest
+import json
+from pathlib import Path
+
+# ── Block 1: Basic fixtures with scope ────────────────────────
+
+@pytest.fixture(scope="session")
+def ap_inventory():
+    """
+    Load the AP inventory JSON file once for the entire test session.
+    scope="session" means this fixture runs ONCE per pytest invocation,
+    not once per test — a 50-test suite loads the file exactly 1 time.
+    """
+    inventory_path = Path("ap_inventory.json")
+    if not inventory_path.exists():
+        pytest.skip("ap_inventory.json not found — skipping inventory tests")
+
+    with open(inventory_path) as f:
+        data = json.load(f)
+    return data   # Returned value is injected as the fixture parameter
+
+@pytest.fixture(scope="session")
+def simulated_scan():
+    """
+    Provide simulated AP scan data for tests that don't need real hardware.
+    Replace this with a real scan call when running on physical hardware.
+    """
+    return [
+        {"ssid": "CorpWifi-5G",  "bssid": "AA:BB:CC:01:02:03",
+         "rssi": -52, "channel": 36, "security": "WPA2"},
+        {"ssid": "CorpWifi-2G",  "bssid": "AA:BB:CC:01:02:04",
+         "rssi": -68, "channel": 6,  "security": "WPA2"},
+        {"ssid": "GuestWifi",    "bssid": "AA:BB:CC:01:02:05",
+         "rssi": -71, "channel": 11, "security": "WPA2"},
+    ]
+
+@pytest.fixture(scope="module")
+def min_rssi_threshold():
+    """Module-scoped: runs once per test module (file), not per test."""
+    return -75</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — yield Fixtures for Setup and Teardown</div>
+      <p>
+        <code>yield</code> inside a fixture splits it into setup (before yield) and
+        teardown (after yield). The teardown code is guaranteed to run even if the
+        test raises an exception — exactly like a <code>finally</code> block.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">import subprocess
+import os
+
+# ── Block 2: yield fixtures for setup/teardown ─────────────────
+
+@pytest.fixture(scope="function")
+def temp_test_dir(tmp_path):
+    """
+    Create a temporary directory for test output files.
+    tmp_path is a built-in pytest fixture that creates a unique temp dir.
+    The directory is automatically cleaned up after each test.
+    """
+    test_dir = tmp_path / "wlan_test_output"
+    test_dir.mkdir()
+    yield test_dir
+    # Teardown: pytest cleans up tmp_path automatically, but we can log here
+    # print(f"\n[Fixture teardown] test dir was: {test_dir}")
+
+@pytest.fixture(scope="session")
+def monitor_interface():
+    """
+    Session-scoped fixture that enables monitor mode before all tests
+    and restores managed mode after all tests complete.
+
+    yield = the monitor interface name (used as 'iface' in tests)
+    """
+    iface = "wlan0"
+
+    # Skip silently if not root (CI without hardware)
+    if os.geteuid() != 0:
+        pytest.skip("Monitor mode requires root — skipping hardware tests")
+
+    # ── Setup ──────────────────────────────────────────────────
+    print(f"\n[fixture] Enabling monitor mode on {iface}")
+    subprocess.run(["ip", "link", "set", iface, "down"], check=True)
+    subprocess.run(["iw", "dev", iface, "set", "type", "monitor"], check=True)
+    subprocess.run(["ip", "link", "set", iface, "up"], check=True)
+
+    yield iface   # ← Tests receive this value
+
+    # ── Teardown (guaranteed to run) ──────────────────────────
+    print(f"\n[fixture] Restoring {iface} to managed mode")
+    subprocess.run(["ip", "link", "set", iface, "down"], check=True)
+    subprocess.run(["iw", "dev", iface, "set", "type", "managed"], check=True)
+    subprocess.run(["ip", "link", "set", iface, "up"], check=True)</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — Using Fixtures in Test Functions</div>
+      <p>
+        Fixtures are injected by name — just include the fixture name as a parameter
+        to your test function. pytest resolves it automatically.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">test_with_fixtures.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># test_with_fixtures.py — uses fixtures from conftest.py
+
+# No import of conftest needed — pytest injects fixtures by name
+
+def test_inventory_has_aps(ap_inventory):
+    """The AP inventory must not be empty."""
+    aps = ap_inventory.get("access_points", [])
+    assert len(aps) &gt; 0, "Inventory is empty — check ap_inventory.json"
+
+def test_scan_count_matches_inventory(simulated_scan, ap_inventory):
+    """Number of discovered APs should match inventory count."""
+    expected = len(ap_inventory.get("access_points", []))
+    discovered = len(simulated_scan)
+    assert discovered == expected, (
+        f"Expected {expected} APs from inventory, scan found {discovered}"
+    )
+
+def test_rssi_above_threshold(simulated_scan, min_rssi_threshold):
+    """Every AP must exceed the minimum RSSI threshold."""
+    below = [ap for ap in simulated_scan if ap["rssi"] &lt; min_rssi_threshold]
+    assert len(below) == 0, (
+        f"APs below {min_rssi_threshold} dBm: "
+        + ", ".join(f"{a['ssid']} ({a['rssi']} dBm)" for a in below)
+    )
+
+def test_output_file_created(temp_test_dir):
+    """Verify test output can be written to the temp directory."""
+    output = temp_test_dir / "result.txt"
+    output.write_text("PASS")
+    assert output.exists()
+    assert output.read_text() == "PASS"</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>Fixtures are set up once (session scope) and shared. Tests run fast after the initial setup.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ pytest test_with_fixtures.py -v -s</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-dim">collected 4 items</span>
+
+test_with_fixtures.py::<span class="t-green">test_inventory_has_aps                 PASSED</span>
+test_with_fixtures.py::<span class="t-green">test_scan_count_matches_inventory      PASSED</span>
+test_with_fixtures.py::<span class="t-green">test_rssi_above_threshold             PASSED</span>
+test_with_fixtures.py::<span class="t-green">test_output_file_created              PASSED</span>
+
+<span class="t-dim">========================= 4 passed in 0.23s =========================</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Add more fixtures and practise fixture composition:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Add a <code>wlan_config</code> fixture (session scope)
+          that reads <code>test_config.yaml</code> from Day 7 and returns its contents.
+          Write a test that uses both <code>wlan_config</code> and <code>simulated_scan</code>
+          to verify the scan data matches the YAML thresholds.</li>
+        <li><strong>Task 2:</strong> Add a function-scoped fixture <code>csv_report</code>
+          that creates a fresh CSV file in <code>tmp_path</code>, yields the file path,
+          then (in teardown) asserts the file was actually written to — ensuring tests
+          don't silently skip reporting.</li>
+        <li><strong>Bonus:</strong> Add fixture parametrization — a
+          <code>threshold_level</code> fixture that returns either <code>-70</code>
+          or <code>-75</code> dBm, causing every test that uses it to run twice
+          with different threshold values. Use
+          <code>@pytest.fixture(params=[-70, -75])</code>.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> Fixture composition works by chaining — just add another
+        fixture name as a parameter to your fixture function. For example:
+        <code>def my_fixture(simulated_scan, wlan_config):</code> — pytest injects
+        both automatically, and your fixture can combine their values.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#a371f7; margin-bottom:4px;">
+            Up Next · Day 30
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Parametrized Testing — 50 SSIDs × 1 Script
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            One test function, 50 AP configurations, 50 separate test cases — all from
+            a single parametrize decorator and a CSV file. Tomorrow you'll test your
+            entire fleet with one command.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

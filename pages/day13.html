@@ -1,0 +1,336 @@
+<!-- ============================================================
+     Day 13: Channel Hopping — Scanning the Full RF Spectrum
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 13</span>
+      <span class="phase-badge" style="background:rgba(63,185,80,0.15); color:#3fb950; border:1px solid rgba(63,185,80,0.3);">
+        Phase 2 · OS &amp; Interfaces
+      </span>
+    </div>
+    <h1>Channel Hopping —<br>Scanning the Full RF Spectrum</h1>
+    <p>
+      A fixed-channel sniffer only sees APs on one channel. Real WLAN scanners cycle through
+      every channel quickly — a technique called channel hopping. Today you'll build a
+      threading-based hopper that switches channels while Scapy captures on the same
+      interface, covering all 2.4 GHz and 5 GHz channels automatically.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~55 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>scapy · threading · subprocess</span></div>
+      <div class="hero-stat"><span>📻</span><span>2.4 GHz + 5 GHz</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>Why Sniffing on One Channel Isn't Enough</h3>
+      <p>
+        Each Wi-Fi channel is a separate frequency slice. When your adapter is tuned to
+        channel 6, it is physically incapable of receiving traffic on channel 1 or 11.
+        For a complete site survey — discovering every AP, every client, every rogue device —
+        you need to cycle through all channels systematically.
+      </p>
+
+      <div class="callout">
+        <strong>Professional WLAN scanners hop 20–50 channels in under 5 seconds.</strong><br>
+        The standard dwell time is 100–200 ms per channel — long enough to catch at least
+        one beacon (APs beacon every 100 ms by default) before moving on.
+        Shorter = faster overall scan but may miss low-duty-cycle frames.
+      </div>
+
+      <h3>Threading: The Channel Hopper Pattern</h3>
+      <p>
+        Scapy's <code>sniff()</code> is a blocking call — it owns the thread until stopped.
+        To simultaneously hop channels, you run the hopper in a separate <strong>thread</strong>
+        using Python's <code>threading.Thread</code>. Both threads share the same interface
+        and AP registry dict. This is the foundation of every real WLAN scanner: one thread
+        captures, one thread hops, one thread (optionally) analyses and reports.
+      </p>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — Channel Lists, set_channel(), and the Hopper Thread</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>Day13_channel_hopper.py</code>. The code is split into channel data,
+        the channel-setter function, the hopper thread, and the main scanner loop.
+      </p>
+
+      <div class="step-label">Block 1 — Channel Lists for 2.4 GHz and 5 GHz</div>
+      <p>
+        Channel numbers map to specific centre frequencies. The 2.4 GHz band has 14 channels
+        (1-14 depending on country), but channels 1, 6, and 11 are the non-overlapping ones.
+        The 5 GHz band uses UNII sub-bands with non-consecutive channel numbers (36, 40, 44...).
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day13_channel_hopper.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 13: Channel Hopping — Full-Spectrum WLAN Scanner
+# Requires: root + monitor mode capable adapter
+# =============================================================
+
+import threading
+import time
+import subprocess
+from scapy.all import sniff, Dot11, Dot11Beacon, Dot11Elt, RadioTap
+
+# 2.4 GHz channels (US/EU — adjust for your regulatory domain)
+CHANNELS_2GHZ = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+
+# 5 GHz UNII-1, UNII-2, UNII-2E, UNII-3 bands
+CHANNELS_5GHZ = [36, 40, 44, 48, 52, 56, 60, 64,
+                 100, 104, 108, 112, 116, 120, 124, 128,
+                 132, 136, 140, 149, 153, 157, 161, 165]
+
+def build_channel_plan(include_5ghz=True):
+    """
+    Build the ordered list of channels to hop through.
+    Mix 2.4 GHz and 5 GHz to discover both bands simultaneously.
+    """
+    if include_5ghz:
+        # Interleave: hop a few 2.4 GHz then some 5 GHz channels
+        plan = CHANNELS_2GHZ + CHANNELS_5GHZ
+    else:
+        plan = CHANNELS_2GHZ
+    return plan
+
+print(f"[Channel Plan] 2.4 GHz: {CHANNELS_2GHZ}")
+print(f"[Channel Plan] 5 GHz:   {CHANNELS_5GHZ[:8]}... ({len(CHANNELS_5GHZ)} channels)")</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — set_channel() via iw</div>
+      <p>
+        The <code>iw</code> command is the modern Linux tool for Wi-Fi configuration.
+        <code>iw dev wlan0mon set channel 36</code> tunes the adapter to 5 GHz channel 36
+        instantly. We wrap this in a Python function with error handling.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># ── Block 2: set_channel() ────────────────────────────────────
+
+def set_channel(interface, channel):
+    """
+    Tune a monitor-mode interface to a specific channel using iw.
+    Returns True on success, False on failure.
+    """
+    result = subprocess.run(
+        ["iw", "dev", interface, "set", "channel", str(channel)],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        # Don't crash on channel errors — some channels aren't valid for the region
+        return False
+    return True
+
+# Test it
+IFACE = "wlan0mon"
+ok = set_channel(IFACE, 36)
+print(f"\n[set_channel] Ch 36: {'OK' if ok else 'FAILED (expected without adapter)'}")</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — ChannelHopper Thread</div>
+      <p>
+        The hopper runs as a daemon thread — it doesn't prevent the program from exiting
+        when the main thread finishes. The <code>stop_event</code> (a <code>threading.Event</code>)
+        is a clean way to signal the hopper to stop without using global flags or
+        forcefully killing threads.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># ── Block 3: ChannelHopper threading.Thread ──────────────────
+
+class ChannelHopper(threading.Thread):
+    """
+    Background thread that cycles through channels while Scapy sniffs.
+    Uses a threading.Event to allow clean shutdown.
+    """
+
+    def __init__(self, interface, channels, dwell_time=0.15):
+        super().__init__(daemon=True)   # Daemon: exits when main thread exits
+        self.interface   = interface
+        self.channels    = channels
+        self.dwell_time  = dwell_time   # Seconds to stay on each channel
+        self.stop_event  = threading.Event()
+        self.current_ch  = None
+
+    def run(self):
+        """Hop channels in a loop until stop_event is set."""
+        idx = 0
+        while not self.stop_event.is_set():
+            ch = self.channels[idx % len(self.channels)]
+            if set_channel(self.interface, ch):
+                self.current_ch = ch
+            time.sleep(self.dwell_time)
+            idx += 1
+
+    def stop(self):
+        """Signal the hopper to stop gracefully."""
+        self.stop_event.set()</code></pre>
+      </div>
+
+      <div class="step-label">Block 4 — Putting It Together: Hopper + Sniffer</div>
+      <p>
+        Launch the hopper thread first, then start sniffing. Both run concurrently —
+        the hopper changes the channel every 150ms while Scapy captures whatever it hears
+        on the current channel.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># ── Block 4: Combined hopper + sniffer ───────────────────────
+
+ap_registry = {}
+
+def beacon_handler(pkt):
+    """Capture beacon frames and log SSID + RSSI per AP."""
+    if not pkt.haslayer(Dot11Beacon):
+        return
+    bssid = pkt[Dot11].addr3
+    ssid  = None
+    ie    = pkt.getlayer(Dot11Elt)
+    while ie:
+        if ie.ID == 0:
+            ssid = ie.info.decode("utf-8", errors="replace")
+            break
+        ie = ie.payload.getlayer(Dot11Elt)
+    rssi = getattr(pkt.getlayer(RadioTap), "dBm_AntSignal", None)
+    if ssid and bssid:
+        ap_registry[bssid] = {"ssid": ssid, "rssi": rssi}
+
+channels = build_channel_plan(include_5ghz=True)
+hopper   = ChannelHopper(IFACE, channels, dwell_time=0.15)
+
+print(f"\n[+] Starting channel hopper + sniffer for 30 seconds")
+hopper.start()
+
+try:
+    sniff(iface=IFACE, prn=beacon_handler, timeout=30, store=False)
+finally:
+    hopper.stop()
+    print(f"[+] Done. {len(ap_registry)} unique APs discovered.")</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>With several APs in range across 2.4 GHz and 5 GHz, the scanner discovers them all.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ sudo python Day13_channel_hopper.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-dim">[Channel Plan] 2.4 GHz: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]</span>
+<span class="t-dim">[Channel Plan] 5 GHz:   [36, 40, 44, 48, 52, 56, 60, 64]... (24 channels)</span>
+<span class="t-dim">[set_channel] Ch 36: OK</span>
+
+<span class="t-green">[+] Starting channel hopper + sniffer for 30 seconds</span>
+<span class="t-dim">  Hopping 35 channels at 150ms dwell time...</span>
+  CorpWifi-5G    Ch36  -52 dBm
+  CorpWifi-2G    Ch 6  -61 dBm
+  GuestWifi      Ch11  -68 dBm
+  NeighbourAP    Ch 1  -79 dBm
+
+<span class="t-blue">[+] Done. 4 unique APs discovered.</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Add intelligence to the channel hopper based on what it discovers:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Track how many beacons are seen per channel during
+          the first 10 seconds. After 10 seconds, build a "smart" channel plan that
+          only hops to channels where at least one AP was detected. Print both the
+          full plan and the smart plan for comparison.</li>
+        <li><strong>Task 2:</strong> Add a <code>--band</code> CLI argument
+          (<code>sys.argv</code>) that accepts <code>2.4</code>, <code>5</code>, or
+          <code>all</code>, and builds the channel plan accordingly.</li>
+        <li><strong>Bonus:</strong> Implement adaptive dwell time — if more than 3 APs
+          were seen on a channel, increase its dwell time to 300ms. If none were seen
+          after 3 hops, skip it entirely. This mirrors how real scanners prioritise busy
+          channels.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> Use a <code>Counter</code> dict:
+        <code>from collections import Counter; beacon_count = Counter()</code>.
+        In <code>beacon_handler</code>, add
+        <code>beacon_count[hopper.current_ch] += 1</code> to track which channel
+        each beacon came from.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#3fb950; margin-bottom:4px;">
+            Up Next · Day 14
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Scapy Frame Filters — Targeting Specific 802.11 Subtypes
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            Your sniffer captures everything. Tomorrow you'll add surgical filters to
+            target specific frame subtypes — beacons, probe requests, data frames, deauth
+            storms — and build a frame-type counter and rogue AP detector.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

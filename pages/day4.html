@@ -1,0 +1,344 @@
+<!-- ============================================================
+     Day 4: Functions — Reusable Building Blocks for Testers
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- ── Hero ─────────────────────────────────────────────── -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 04</span>
+      <span class="phase-badge" style="background:rgba(88,166,255,0.15); color:#58a6ff; border:1px solid rgba(88,166,255,0.3);">
+        Phase 1 · Fundamentals
+      </span>
+    </div>
+    <h1>Functions —<br>Reusable Building Blocks for Testers</h1>
+    <p>
+      Stop copy-pasting the same signal check across 10 scripts. Today you'll write clean,
+      reusable Python functions that turn complex WLAN logic into single-line calls —
+      the foundation of every professional automation framework you'll ever build.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~50 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>No new libraries</span></div>
+      <div class="hero-stat"><span>🔧</span><span>def · return · import</span></div>
+    </div>
+  </div>
+
+  <!-- ── The Why ───────────────────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>The Copy-Paste Trap</h3>
+      <p>
+        In Days 1–3 you wrote scripts that ran top to bottom — great for one-offs.
+        But real WLAN automation means running the same signal check on 50 APs, across
+        3 test suites, on 5 different machines, inside CI pipelines.
+      </p>
+      <p>
+        Without functions, you copy-paste the same 8-line block everywhere. Then a threshold
+        changes from -70 to -72 dBm. You have to find and update 14 copies. You miss two.
+        Two tests now report wrong results. Your manager asks why.
+      </p>
+
+      <div class="callout">
+        <strong>Functions are the antidote to copy-paste.</strong><br>
+        Write the logic once, name it clearly, call it anywhere. When the threshold changes,
+        you change it in one place — and every single script that calls the function gets the
+        update automatically.
+      </div>
+
+      <h3>What Functions Give You</h3>
+      <ul>
+        <li><strong>DRY code</strong> — Don't Repeat Yourself. Write once, call anywhere.</li>
+        <li><strong>Testability</strong> — Test each function in isolation before wiring it into a larger script.</li>
+        <li><strong>Readability</strong> — <code>check_signal(rssi)</code> tells you exactly what it does. A 10-line if/elif block does not.</li>
+        <li><strong>Reuse across projects</strong> — Build a personal <code>wlan_utils.py</code> toolkit you import into every future script.</li>
+      </ul>
+
+    </div>
+  </div>
+
+  <!-- ── Code Walkthrough ──────────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — Building Your WLAN Toolkit</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create a new file called <code>Day04_functions.py</code>. Each block below builds on the last.
+        By the end you'll have five reusable functions ready to import into any future script.
+      </p>
+
+      <div class="step-label">Block 1 — Anatomy of a Python Function</div>
+      <p>
+        Every function has the same skeleton. The <code>def</code> keyword declares it,
+        the name describes what it does, parameters are the inputs, and <code>return</code>
+        sends a value back to whoever called it.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day04_functions.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def classify_signal(rssi):
+    """
+    Classify Wi-Fi signal strength from an RSSI dBm value.
+    Returns: 'Excellent', 'Good', 'Fair', or 'Poor'
+    """
+    if rssi >= -50:
+        return "Excellent"
+    elif rssi >= -60:
+        return "Good"
+    elif rssi >= -70:
+        return "Fair"
+    else:
+        return "Poor"
+
+
+# --- Call the function ---
+test_values = [-42, -58, -67, -81]
+for rssi in test_values:
+    quality = classify_signal(rssi)
+    print(f"RSSI {rssi:4d} dBm  →  {quality}")</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — Default Parameters &amp; Keyword Arguments</div>
+      <p>
+        Default values make functions flexible. Callers only pass what they need to override —
+        everything else uses a sensible default. This is how you write one function that handles
+        both quick checks and detailed validation.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def evaluate_ap(ssid, rssi, channel=6, security="WPA2", min_rssi=-70):
+    """
+    Evaluate an AP against pass/fail criteria.
+    min_rssi has a default so quick calls don't need to specify it.
+    """
+    passed = (rssi >= min_rssi) and (security in ("WPA2", "WPA3"))
+    status = "PASS ✓" if passed else "FAIL ✗"
+    print(f"  [{status}] {ssid:20s} | RSSI: {rssi} dBm | Ch: {channel} | Sec: {security}")
+    return passed
+
+
+# Minimal call — uses all defaults
+evaluate_ap("CorpWifi",  rssi=-55)
+
+# Full override — every argument specified
+evaluate_ap("GuestWifi", rssi=-75, channel=11, security="Open", min_rssi=-70)
+
+# Keyword args — order doesn't matter when you name them
+evaluate_ap(ssid="LabAP-5G", rssi=-48, security="WPA3", channel=36)</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — Returning Multiple Values</div>
+      <p>
+        Python functions can return a tuple — multiple values at once.
+        Perfect for returning a result AND a human-readable reason together,
+        so the caller can log or display both without calling the function twice.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def check_channel_overlap(ch1, ch2):
+    """
+    Check if two 2.4 GHz channels cause interference.
+    Non-overlapping channels in 2.4 GHz: 1, 6, 11
+    Returns: (overlaps: bool, reason: str)
+    """
+    non_overlapping = {1, 6, 11}
+
+    if ch1 == ch2:
+        return True, f"Both APs on channel {ch1} — direct co-channel interference"
+
+    if ch1 not in non_overlapping or ch2 not in non_overlapping:
+        return True, f"Ch {ch1} or Ch {ch2} is not a non-overlapping channel"
+
+    return False, f"Channels {ch1} and {ch2} are non-overlapping — no interference"
+
+
+# Unpack both return values at once
+overlaps, reason = check_channel_overlap(6, 6)
+print(f"  Overlap: {overlaps}  →  {reason}")
+
+overlaps, reason = check_channel_overlap(1, 11)
+print(f"  Overlap: {overlaps}  →  {reason}")</code></pre>
+      </div>
+
+      <div class="step-label">Block 4 — Building Your Personal wlan_utils Module</div>
+      <p>
+        Save your functions in a separate file called <code>wlan_utils.py</code>.
+        Every future script imports from it — one source of truth for all your WLAN logic.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">wlan_utils.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># wlan_utils.py  ← Your personal WLAN toolkit — grows throughout this course
+
+def rssi_to_percent(rssi):
+    """Convert RSSI dBm to a 0–100 quality percentage."""
+    rssi = max(-100, min(-50, rssi))    # clamp to -100…-50 range
+    return int((rssi + 100) * 2)        # -100 → 0%, -50 → 100%
+
+
+def is_5ghz_channel(channel):
+    """Return True if the channel number belongs to the 5 GHz band."""
+    return channel >= 36
+
+
+def format_bssid(raw):
+    """Normalise any BSSID format to uppercase AA:BB:CC:DD:EE:FF."""
+    clean = raw.replace("-", ":").upper()
+    if len(clean) == 12:                # no separators: AABBCCDDEEFF
+        clean = ":".join(clean[i:i+2] for i in range(0, 12, 2))
+    return clean
+
+
+def ap_summary(ssid, bssid, rssi, channel):
+    """Return a one-line human-readable AP summary string."""
+    band  = "5 GHz" if is_5ghz_channel(channel) else "2.4 GHz"
+    qual  = rssi_to_percent(rssi)
+    bssid = format_bssid(bssid)
+    return f"{ssid} [{bssid}] Ch{channel} ({band})  {rssi} dBm  ({qual}%)"</code></pre>
+      </div>
+
+      <div class="step-label">Block 5 — Importing and Using Your Module</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day04_functions.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">from wlan_utils import classify_signal, ap_summary
+
+# Simulate a scan result
+scan_results = [
+    {"ssid": "CorpAP-1",  "bssid": "00:11:22:33:44:01", "rssi": -52, "channel": 1},
+    {"ssid": "CorpAP-2",  "bssid": "00:11:22:33:44:02", "rssi": -68, "channel": 6},
+    {"ssid": "CorpAP-5G", "bssid": "00:11:22:33:44:03", "rssi": -45, "channel": 36},
+]
+
+print("=== AP Scan Report ===")
+for ap in scan_results:
+    summary = ap_summary(ap["ssid"], ap["bssid"], ap["rssi"], ap["channel"])
+    quality = classify_signal(ap["rssi"])
+    print(f"  {summary}  —  {quality}")</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Expected Output ────────────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>This is what you should see when you run the complete script. Your RSSI values
+      in the classify test will appear exactly like this:</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ python Day04_functions.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre>RSSI  -42 dBm  →  <span class="t-green">Excellent</span>
+RSSI  -58 dBm  →  <span class="t-blue">Good</span>
+RSSI  -67 dBm  →  <span class="t-yellow">Fair</span>
+RSSI  -81 dBm  →  <span class="t-red">Poor</span>
+
+  [<span class="t-green">PASS ✓</span>] CorpWifi              | RSSI: -55 dBm | Ch: 6  | Sec: WPA2
+  [<span class="t-red">FAIL ✗</span>] GuestWifi             | RSSI: -75 dBm | Ch: 11 | Sec: Open
+  [<span class="t-green">PASS ✓</span>] LabAP-5G              | RSSI: -48 dBm | Ch: 36 | Sec: WPA3
+
+  Overlap: True   →  Both APs on channel 6 — direct co-channel interference
+  Overlap: False  →  Channels 1 and 11 are non-overlapping — no interference
+
+=== AP Scan Report ===
+  CorpAP-1 [00:11:22:33:44:01] Ch1 (2.4 GHz)  -52 dBm  (96%)  —  <span class="t-blue">Good</span>
+  CorpAP-2 [00:11:22:33:44:02] Ch6 (2.4 GHz)  -68 dBm  (64%)  —  <span class="t-yellow">Fair</span>
+  <span class="t-blue">CorpAP-5G [00:11:22:33:44:03] Ch36 (5 GHz)   -45 dBm (110%)  —  Excellent</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Exercise ────────────────────────────────────────────── -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Add a new function to your <code>wlan_utils.py</code> module:
+      </p>
+      <ul>
+        <li>
+          <strong>Task 1:</strong> Write <code>detect_channel_conflicts(ap_list)</code>
+          that takes a list of AP dicts (each with <code>ssid</code> and <code>channel</code>)
+          and returns a list of conflicting SSID pairs that share the same 2.4 GHz channel.
+        </li>
+        <li>
+          <strong>Task 2:</strong> Print a warning line for every conflict found, e.g.
+          <code>"⚠ CorpAP-1 and CorpAP-3 are both on channel 6"</code>.
+        </li>
+        <li>
+          <strong>Bonus:</strong> Extend the function to also detect channels that are
+          <em>adjacent</em> (e.g. channels 5 and 6 overlap even if they're different numbers).
+          Return those as warnings rather than hard failures.
+        </li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> Use a dictionary keyed by channel to group APs:
+        <code>by_channel = {}</code>, then <code>by_channel.setdefault(ch, []).append(ssid)</code>.
+        Any channel with more than one AP in its list is a conflict.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── What's Next ────────────────────────────────────────── -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#58a6ff; margin-bottom:4px;">
+            Up Next · Day 5
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            pip, Virtual Environments &amp; the Library Ecosystem
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            Your <code>wlan_utils.py</code> works — but how do you share it, version it,
+            and make sure it installs cleanly on a colleague's machine?
+            Tomorrow: virtual environments, <code>pip freeze</code>, and <code>requirements.txt</code>
+            — the tools every professional automation engineer uses.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

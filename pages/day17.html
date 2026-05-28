@@ -1,0 +1,352 @@
+<!-- ============================================================
+     Day 17: Scanning for SSIDs Programmatically
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 17</span>
+      <span class="phase-badge" style="background:rgba(210,153,34,0.15); color:#d29922; border:1px solid rgba(210,153,34,0.3);">
+        Phase 3 · Core Automation
+      </span>
+    </div>
+    <h1>Scanning for SSIDs —<br>Programmatic Wi-Fi Discovery</h1>
+    <p>
+      Before you connect to a network, you need to confirm it's actually visible from
+      where you're standing. Today you'll trigger programmatic Wi-Fi scans, parse SSID
+      lists cross-platform, and build a <code>scan_until_found()</code> function that
+      polls until a target network appears — essential for connection automation tests.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~50 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>subprocess · re · time</span></div>
+      <div class="hero-stat"><span>📶</span><span>Linux · macOS</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>Why Scan Before Connecting?</h3>
+      <p>
+        A connection test that simply calls "connect to CorpWifi-5G" will fail if the
+        AP isn't visible — but the failure reason will be cryptic: timeout, association
+        refused, or simply no output. If you scan first and confirm the SSID is visible
+        with adequate RSSI before attempting the connection, your test failures become
+        diagnostic: "AP not found" vs. "AP found but connection failed" vs.
+        "Connection succeeded but DHCP failed."
+      </p>
+
+      <div class="callout">
+        <strong>A scan is a prerequisite, not a step.</strong><br>
+        Think of <code>scan_until_found(ssid)</code> as a gate that your test must
+        pass before attempting a connection. If the AP doesn't appear within the
+        timeout, the test is marked as SKIP (environment issue) rather than FAIL
+        (software bug) — a crucial distinction in CI reporting.
+      </div>
+
+      <h3>Triggering a Fresh Scan</h3>
+      <p>
+        Network managers cache scan results. On Linux, <code>nmcli dev wifi list</code>
+        returns cached results unless you force a fresh scan with
+        <code>nmcli dev wifi list --rescan yes</code>. On macOS, the
+        <code>airport -s</code> command always returns a live scan. Understanding the
+        difference prevents you from building automation that reads stale data and
+        reports false positives.
+      </p>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — nmcli, airport, and scan_until_found()</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>Day17_scan_ssids.py</code>. Each block handles a different
+        scan scenario, building up to the polling function at the end.
+      </p>
+
+      <div class="step-label">Block 1 — nmcli_scan() with Forced Rescan</div>
+      <p>
+        The <code>--rescan yes</code> flag forces NetworkManager to send a new probe
+        request sequence before returning results. This adds about 2-3 seconds but
+        guarantees fresh data.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day17_scan_ssids.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 17: Programmatic SSID Scanning
+# =============================================================
+
+import subprocess
+import platform
+import time
+import re
+
+def nmcli_scan(trigger_rescan=True):
+    """
+    Get available Wi-Fi networks via nmcli (Linux/NetworkManager).
+    trigger_rescan=True forces a fresh scan (slower but accurate).
+    Returns a list of dicts with ssid, bssid, signal, channel, security.
+    """
+    # Build command — --rescan yes triggers a fresh OTA scan
+    rescan = "yes" if trigger_rescan else "no"
+    cmd = ["nmcli", "--terse", "--fields",
+           "SSID,BSSID,SIGNAL,CHAN,SECURITY",
+           "dev", "wifi", "list", "--rescan", rescan]
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+    if result.returncode != 0:
+        print(f"[nmcli ERROR] {result.stderr.strip()}")
+        return []
+
+    networks = []
+    for line in result.stdout.strip().splitlines():
+        # nmcli -t separates fields with ':' but BSSID itself contains ':'
+        # Use maxsplit cleverly or split by known field count
+        parts = line.split(":")
+        if len(parts) &gt;= 5:
+            networks.append({
+                "ssid":     parts[0],
+                "signal":   int(parts[7]) if len(parts) &gt; 7 and parts[7].isdigit() else 0,
+                "channel":  int(parts[8]) if len(parts) &gt; 8 and parts[8].isdigit() else 0,
+                "security": parts[9] if len(parts) &gt; 9 else "Unknown"
+            })
+    return networks</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — airport_scan() for macOS</div>
+      <p>
+        Apple's <code>airport</code> utility produces column-aligned output. The regex
+        approach handles variable-width SSID and BSSID fields correctly.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def airport_scan():
+    """
+    Get available Wi-Fi networks via Apple's airport utility (macOS).
+    Output format: SSID  BSSID  RSSI  CHANNEL  HT  CC  SECURITY
+    """
+    airport = ("/System/Library/PrivateFrameworks/Apple80211.framework"
+               "/Versions/Current/Resources/airport")
+    result = subprocess.run([airport, "-s"],
+                            capture_output=True, text=True, timeout=15)
+    networks = []
+    for line in result.stdout.splitlines()[1:]:   # Skip header row
+        # airport uses fixed-width columns — split on 2+ spaces
+        parts = re.split(r"\s{2,}", line.strip())
+        if len(parts) &gt;= 4:
+            try:
+                networks.append({
+                    "ssid":     parts[0],
+                    "bssid":    parts[1],
+                    "rssi":     int(parts[2]),
+                    "channel":  int(parts[3].split(",")[0]),  # "6,+1" → 6
+                    "security": parts[6] if len(parts) &gt; 6 else "Unknown"
+                })
+            except (ValueError, IndexError):
+                continue
+    return networks</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — Cross-Platform scan() Dispatcher</div>
+      <p>
+        The dispatcher selects the right scan function for the current OS, returning
+        a consistent list of dicts regardless of platform.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def scan():
+    """
+    Cross-platform SSID scan. Returns list of AP dicts.
+    Each dict has: ssid, rssi (where available), channel, security.
+    """
+    os_name = platform.system()
+    if os_name == "Linux":
+        return nmcli_scan()
+    elif os_name == "Darwin":
+        return airport_scan()
+    else:
+        print(f"[scan] Unsupported OS: {os_name}")
+        return []
+
+networks = scan()
+print(f"[Scan] Found {len(networks)} networks:")
+for n in sorted(networks, key=lambda x: x.get("signal", x.get("rssi", 0)), reverse=True):
+    print(f"  {n.get('ssid','?'):25s} Ch{n.get('channel','?'):3}  sig={n.get('signal', n.get('rssi','?'))}")</code></pre>
+      </div>
+
+      <div class="step-label">Block 4 — scan_until_found() Polling Function</div>
+      <p>
+        This is the most important function of today. It repeatedly scans and checks
+        whether the target SSID has appeared. The timeout and interval parameters make
+        it configurable — short intervals for testing, longer for CI where scan
+        triggering is slower.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def scan_until_found(target_ssid, timeout=30, interval=5, min_rssi=None):
+    """
+    Poll Wi-Fi scans until the target SSID appears (or timeout expires).
+
+    Args:
+        target_ssid: SSID string to look for
+        timeout:     Max seconds to wait (default 30)
+        interval:    Seconds between scans (default 5)
+        min_rssi:    If set, AP must also meet this RSSI threshold
+
+    Returns:
+        AP dict if found, None if timed out.
+    """
+    deadline = time.time() + timeout
+    attempt  = 0
+
+    while time.time() &lt; deadline:
+        attempt += 1
+        print(f"  [Scan {attempt}] Searching for '{target_ssid}'...")
+        networks = scan()
+
+        for ap in networks:
+            if ap.get("ssid") == target_ssid:
+                rssi_ok = True
+                if min_rssi is not None:
+                    rssi_val = ap.get("rssi", ap.get("signal", -100))
+                    rssi_ok  = rssi_val &gt;= min_rssi
+
+                if rssi_ok:
+                    print(f"  [✓] Found '{target_ssid}' on scan {attempt}")
+                    return ap
+                else:
+                    print(f"  [→] '{target_ssid}' found but RSSI too low")
+
+        remaining = int(deadline - time.time())
+        print(f"  [→] Not found. {remaining}s remaining. Waiting {interval}s...")
+        time.sleep(interval)
+
+    print(f"  [✗] '{target_ssid}' not found within {timeout}s")
+    return None
+
+# Example usage
+ap = scan_until_found("CorpWifi-5G", timeout=15, interval=3)
+if ap:
+    print(f"\nTarget AP ready: {ap}")</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>The scanner finds available networks, then polls for the target SSID.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ python Day17_scan_ssids.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-green">[Scan] Found 4 networks:</span>
+  CorpWifi-5G               Ch 36  sig=-52
+  CorpWifi-2G               Ch  6  sig=-61
+  GuestWifi                 Ch 11  sig=-68
+  NeighbourAP               Ch  1  sig=-79
+
+  [Scan 1] Searching for 'CorpWifi-5G'...
+  [<span class="t-green">✓</span>] Found 'CorpWifi-5G' on scan 1
+
+Target AP ready: <span class="t-blue">{'ssid': 'CorpWifi-5G', 'channel': 36, 'rssi': -52, 'security': 'WPA2'}</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Extend the scan module with fleet management features:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Write <code>scan_all_expected(inventory)</code>
+          that takes the Day 8 JSON inventory dict and calls <code>scan_until_found()</code>
+          for every AP, collecting results into a report dict. Return a summary with
+          how many APs were found vs. total expected.</li>
+        <li><strong>Task 2:</strong> Add a <code>best_bssid_for_ssid(ssid)</code>
+          function that finds all BSSIDs advertising the given SSID and returns the
+          one with the strongest RSSI — useful for selecting the right AP when an
+          SSID is served by multiple APs on a roaming-capable network.</li>
+        <li><strong>Bonus:</strong> Track scan duration for each call to
+          <code>nmcli_scan()</code> and log it. If a scan takes more than 10 seconds,
+          log a WARNING — this usually means the adapter is busy or NetworkManager
+          is in a bad state.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> Group APs by SSID using a dict:
+        <code>by_ssid = defaultdict(list)</code>, then
+        <code>by_ssid[ap["ssid"]].append(ap)</code> for each AP.
+        To find the strongest BSSID: <code>max(by_ssid[ssid], key=lambda a: a.get("rssi", -100))</code>.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#d29922; margin-bottom:4px;">
+            Up Next · Day 18
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Parsing Beacon Frames — Deep AP Intelligence
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            You know an AP is there. Now you need to know everything about it:
+            beacon interval, supported data rates, capability flags, and whether
+            it's using 802.11n/ac/ax. Tomorrow you'll parse every field of a beacon frame.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

@@ -1,0 +1,320 @@
+<!-- ============================================================
+     Day 32: Allure Reports — Professional Test Evidence
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 32</span>
+      <span class="phase-badge" style="background:rgba(163,113,247,0.15); color:#a371f7; border:1px solid rgba(163,113,247,0.3);">
+        Phase 4 · Test Frameworks
+      </span>
+    </div>
+    <h1>Allure Reports —<br>Professional Test Evidence</h1>
+    <p>
+      Allure transforms your pytest suite into an interactive, drill-down report with
+      features, stories, severity levels, and step-by-step evidence attachments.
+      Today you'll add <code>@allure.feature</code> decorators, <code>@allure.step</code>
+      context managers, and attach RSSI data as evidence — the reporting standard used
+      by professional QA organisations.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~55 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>allure-pytest · allure-python-commons</span></div>
+      <div class="hero-stat"><span>📋</span><span>Features · Stories · Steps</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>pytest-html vs. Allure</h3>
+      <p>
+        pytest-html generates a flat list of passed and failed tests. Allure generates
+        a full test management dashboard: tests grouped by feature (RSSI, Security, DNS),
+        timeline charts showing when each test ran, severity classification (critical/major/minor),
+        and step-by-step drill-down showing exactly what each test did and what it
+        found at each step. For a WLAN certification report, Allure is the professional choice.
+      </p>
+
+      <div class="callout">
+        <strong>Allure uses a two-phase approach.</strong><br>
+        Phase 1: pytest generates raw JSON result files in an <code>allure-results/</code>
+        directory. Phase 2: the Allure CLI renders them into an interactive HTML report.
+        This separation means you can regenerate the report from the same test data with
+        different filters, groupings, or themes.
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — @allure.feature, @allure.step, allure.attach()</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Install: <code>pip install allure-pytest</code>. Install Allure CLI from
+        <code>allure.qatools.io</code> or via Homebrew: <code>brew install allure</code>.
+      </p>
+
+      <div class="step-label">Block 1 — Feature, Story, and Severity Decorators</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">test_allure_demo.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 32: Allure Reports
+# Run: pytest test_allure_demo.py --alluredir=allure-results
+# View: allure serve allure-results
+# =============================================================
+
+import allure
+import pytest
+
+# ── Allure decorators ──────────────────────────────────────────
+
+@allure.feature("RSSI Compliance")        # Groups tests into a Feature
+@allure.story("Minimum RSSI Threshold")   # Sub-group (user story)
+@allure.severity(allure.severity_level.CRITICAL)  # Critical = blocks deployment
+def test_all_aps_above_minimum_rssi():
+    """All APs must be above -75 dBm for production deployment."""
+    scan = [
+        {"ssid": "CorpWifi-5G", "rssi": -52},
+        {"ssid": "CorpWifi-2G", "rssi": -68},
+    ]
+    failing = [ap for ap in scan if ap["rssi"] &lt; -75]
+    assert len(failing) == 0
+
+@allure.feature("Security Compliance")
+@allure.story("WPA2/3 Enforcement")
+@allure.severity(allure.severity_level.CRITICAL)
+def test_no_open_networks():
+    """No AP may use Open (unencrypted) security in a production environment."""
+    scan = [
+        {"ssid": "CorpWifi-5G",  "security": "WPA2"},
+        {"ssid": "GuestWifi",    "security": "WPA2"},
+    ]
+    open_nets = [ap for ap in scan if ap["security"] == "Open"]
+    assert len(open_nets) == 0
+
+@allure.feature("Channel Planning")
+@allure.story("Non-Overlapping Channels")
+@allure.severity(allure.severity_level.MAJOR)
+def test_non_overlapping_channels():
+    scan = [
+        {"ssid": "CorpWifi-2G", "channel": 6},
+        {"ssid": "GuestWifi",   "channel": 11},
+    ]
+    overlapping = [ap for ap in scan
+                   if ap["channel"] &lt;= 14
+                   and ap["channel"] not in {1, 6, 11}]
+    assert len(overlapping) == 0</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — @allure.step Context Manager</div>
+      <p>
+        <code>@allure.step</code> marks a function as a named step in the test report.
+        When the report is rendered, each step shows as a collapsible item with its
+        own pass/fail status — giving you step-level granularity for debugging complex
+        connection tests.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">@allure.step("Perform Wi-Fi scan")
+def do_scan():
+    """Allure records this as a named step with pass/fail."""
+    return [{"ssid": "CorpWifi-5G", "rssi": -52, "security": "WPA2"}]
+
+@allure.step("Verify RSSI for {ssid}")
+def verify_rssi(ssid, rssi, threshold=-75):
+    """Step name includes the ssid parameter — shows in report."""
+    assert rssi &gt;= threshold, f"{ssid}: {rssi} dBm below {threshold} dBm"
+
+@allure.step("Verify security for {ssid}")
+def verify_security(ssid, security):
+    assert security in {"WPA2", "WPA3"}, f"{ssid}: insecure ({security})"
+
+@allure.feature("Connection Validation")
+@allure.story("Full Validation Flow")
+@allure.severity(allure.severity_level.CRITICAL)
+def test_full_validation_with_steps():
+    """Full test showing step-by-step execution in Allure report."""
+    scan_results = do_scan()
+    for ap in scan_results:
+        verify_rssi(ap["ssid"], ap["rssi"])
+        verify_security(ap["ssid"], ap["security"])</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — allure.attach() for Evidence</div>
+      <p>
+        Attaching evidence makes reports self-contained audit documents. Attach RSSI
+        readings as text, scan results as JSON, or log files as plain text — all
+        viewable inline in the Allure report.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">import json
+
+@allure.feature("RSSI Compliance")
+@allure.story("Evidence Attachment")
+def test_with_evidence():
+    """Demonstrate attaching evidence to an Allure test report."""
+    scan_data = [
+        {"ssid": "CorpWifi-5G",  "rssi": -52, "channel": 36},
+        {"ssid": "CorpWifi-2G",  "rssi": -68, "channel": 6},
+    ]
+
+    # Attach the scan data as JSON evidence
+    allure.attach(
+        json.dumps(scan_data, indent=2),
+        name="Scan Results",
+        attachment_type=allure.attachment_type.JSON
+    )
+
+    # Attach a text summary
+    summary = "\n".join(
+        f"{ap['ssid']}: {ap['rssi']} dBm (Ch{ap['channel']})"
+        for ap in scan_data
+    )
+    allure.attach(summary, name="RSSI Summary",
+                  attachment_type=allure.attachment_type.TEXT)
+
+    # Run the actual assertions
+    for ap in scan_data:
+        assert ap["rssi"] &gt;= -75, f"{ap['ssid']}: {ap['rssi']} dBm"</code></pre>
+      </div>
+
+      <div class="step-label">Block 4 — Running and Serving the Allure Report</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Bash</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-bash"># Run tests and generate Allure results (raw JSON)
+pytest test_allure_demo.py --alluredir=allure-results -v
+
+# Serve the report interactively (opens browser automatically)
+allure serve allure-results
+
+# OR: generate a static HTML report to share
+allure generate allure-results -o allure-report --clean
+# Open: allure-report/index.html</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>Pytest generates JSON results; Allure CLI serves an interactive report on localhost.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ pytest test_allure_demo.py --alluredir=allure-results -v</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-dim">collected 5 items</span>
+
+test_allure_demo.py::<span class="t-green">test_all_aps_above_minimum_rssi     PASSED</span>
+test_allure_demo.py::<span class="t-green">test_no_open_networks               PASSED</span>
+test_allure_demo.py::<span class="t-green">test_non_overlapping_channels       PASSED</span>
+test_allure_demo.py::<span class="t-green">test_full_validation_with_steps     PASSED</span>
+test_allure_demo.py::<span class="t-green">test_with_evidence                  PASSED</span>
+
+<span class="t-dim">========================= 5 passed in 0.31s =========================</span>
+
+<span class="t-dim">$ allure serve allure-results</span>
+<span class="t-blue">Generating report to temp directory...
+Report successfully generated to /tmp/allure-report-xxx
+Starting web server...
+2024-01-15 09:01:23.456 [main] INFO  io.qameta.allure.CommandLine - Server started at &lt;http://localhost:52187/&gt;.</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Build a full WLAN test report with all Allure features:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Add <code>allure.dynamic.title()</code> inside
+          a parametrized test to set a custom title per AP:
+          <code>allure.dynamic.title(f"RSSI check: {ssid}")</code>. This makes each
+          parametrized case appear with the AP name in the Allure feature view.</li>
+        <li><strong>Task 2:</strong> Add a <code>@allure.link("https://wiki.corp/wlan-sop",
+          name="WLAN Standard")</code> decorator to your critical tests — linking to
+          the relevant testing standard or runbook from within the report.</li>
+        <li><strong>Bonus:</strong> Write a <code>pytest_runtest_makereport</code> hook
+          in <code>conftest.py</code> that automatically attaches the pytest stdout
+          capture to every failed test as a TEXT attachment — so Allure reports always
+          include the full failure context even for tests that don't use steps.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> <code>allure.dynamic.title()</code>,
+        <code>allure.dynamic.description()</code>, and
+        <code>allure.dynamic.severity()</code> set Allure metadata at runtime —
+        perfect for parametrized tests where the metadata needs to include the
+        current parameter value. Call them inside the test function body, not
+        as decorators.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#a371f7; margin-bottom:4px;">
+            Up Next · Day 33
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Phase 4 Capstone: Full Test Suite
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            All the Phase 4 pieces come together: multi-file test structure, conftest.py
+            with session fixtures, pytest.ini with both reporters, and smoke/integration
+            mark separation — ready for your CI pipeline in Phase 5.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

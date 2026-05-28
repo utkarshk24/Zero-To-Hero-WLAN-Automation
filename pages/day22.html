@@ -1,0 +1,363 @@
+<!-- ============================================================
+     Day 22: DHCP Verification Post-Connection
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 22</span>
+      <span class="phase-badge" style="background:rgba(210,153,34,0.15); color:#d29922; border:1px solid rgba(210,153,34,0.3);">
+        Phase 3 · Core Automation
+      </span>
+    </div>
+    <h1>DHCP Verification —<br>Confirming Your IP Is Correct</h1>
+    <p>
+      A successful association doesn't mean a correct IP. DHCP misconfigurations,
+      exhausted scopes, and APIPA fallbacks are common post-connection failures.
+      Today you'll build a 5-check DHCP validation chain that verifies IP, subnet,
+      gateway, DNS, and lease validity — turning a vague "connected" into a
+      quantified pass/fail result.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~50 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>netifaces · subprocess · ipaddress</span></div>
+      <div class="hero-stat"><span>🌐</span><span>DHCP · IP · Gateway</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>Why DHCP Verification Matters</h3>
+      <p>
+        "Connected to Wi-Fi" means the association succeeded. It does not mean you can
+        actually use the network. A client might associate successfully but receive:
+        an APIPA address (169.254.x.x) because the DHCP scope is exhausted;
+        an address from the wrong subnet due to a misconfigured VLAN;
+        a valid address but no default gateway due to a DHCP server bug;
+        a valid address with a DNS server that doesn't respond.
+        Each of these is a distinct failure that requires a different fix.
+      </p>
+
+      <div class="callout">
+        <strong>DHCP validation is a 5-layer check, not a binary test.</strong><br>
+        Check 1: Is an IP assigned (and not APIPA)?
+        Check 2: Is the subnet mask correct?
+        Check 3: Is a default gateway assigned?
+        Check 4: Is the gateway reachable (ping)?
+        Check 5: Is DNS resolving correctly?
+        All 5 must pass for the connection to be considered fully operational.
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — get_ip_config(), validate_dhcp(), read_dhcp_lease()</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>Day22_dhcp_verify.py</code>. These functions build a complete
+        post-connection validation checklist.
+      </p>
+
+      <div class="step-label">Block 1 — get_ip_config() with netifaces</div>
+      <p>
+        <code>netifaces</code> gives us structured access to interface addresses without
+        parsing command output. It handles all address families (IPv4, IPv6, MAC) and
+        works consistently across Linux, macOS, and Windows.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day22_dhcp_verify.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 22: DHCP Verification Post-Connection
+# =============================================================
+
+import netifaces
+import subprocess
+import re
+import ipaddress
+from pathlib import Path
+
+def get_ip_config(interface="wlan0"):
+    """
+    Read full IP configuration for an interface using netifaces.
+    Returns a dict with ip, netmask, gateway, mac.
+    """
+    config = {"interface": interface, "ip": None, "netmask": None,
+              "gateway": None, "mac": None}
+
+    try:
+        addrs = netifaces.ifaddresses(interface)
+
+        # IPv4 address and netmask
+        ipv4_list = addrs.get(netifaces.AF_INET, [])
+        if ipv4_list:
+            config["ip"]      = ipv4_list[0].get("addr")
+            config["netmask"] = ipv4_list[0].get("netmask")
+
+        # MAC address
+        mac_list = addrs.get(netifaces.AF_LINK, [])
+        if mac_list:
+            config["mac"] = mac_list[0].get("addr")
+
+    except ValueError:
+        pass   # Interface doesn't exist
+
+    # Default gateway (from routing table)
+    gateways = netifaces.gateways()
+    default_gw = gateways.get("default", {}).get(netifaces.AF_INET)
+    if default_gw:
+        gw_ip, gw_iface = default_gw[0], default_gw[1]
+        if gw_iface == interface:
+            config["gateway"] = gw_ip
+
+    return config
+
+cfg = get_ip_config("wlan0")
+print(f"[IP Config] {cfg}")</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — validate_dhcp() 5-Check Chain</div>
+      <p>
+        Each check builds on the previous. If a check fails, subsequent checks that
+        depend on it are skipped rather than failing with a misleading error. This
+        produces a clear diagnostic chain.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def ping_once(host, timeout=2):
+    """Return True if host responds to a single ICMP ping."""
+    result = subprocess.run(
+        ["ping", "-c", "1", "-W", str(timeout), host],
+        capture_output=True
+    )
+    return result.returncode == 0
+
+def validate_dhcp(interface="wlan0", expected_subnet=None):
+    """
+    Run 5-check DHCP validation chain on an interface.
+    Returns a list of (check_name, passed, reason) tuples.
+    """
+    checks = []
+    cfg = get_ip_config(interface)
+
+    # Check 1: IP assigned (and not APIPA 169.254.x.x)
+    ip = cfg.get("ip")
+    if ip and not ip.startswith("169.254."):
+        checks.append(("IP assigned", True, ip))
+    else:
+        checks.append(("IP assigned", False,
+                        f"No valid IP — got: {ip or 'None'} (APIPA/missing)"))
+        return checks   # Cannot continue without an IP
+
+    # Check 2: Subnet mask is valid (not /0 or /32)
+    netmask = cfg.get("netmask", "")
+    try:
+        network = ipaddress.IPv4Network(f"{ip}/{netmask}", strict=False)
+        prefix  = network.prefixlen
+        ok = 8 &lt;= prefix &lt;= 30   # Reasonable range for WLAN clients
+        checks.append(("Subnet valid", ok,
+                        f"/{prefix} ({netmask})"))
+    except ValueError as e:
+        checks.append(("Subnet valid", False, str(e)))
+
+    # Check 3: Expected subnet match (optional)
+    if expected_subnet:
+        try:
+            expected = ipaddress.IPv4Network(expected_subnet, strict=False)
+            in_subnet = ipaddress.IPv4Address(ip) in expected
+            checks.append(("Correct subnet", in_subnet,
+                            f"{ip} in {expected_subnet}: {in_subnet}"))
+        except ValueError:
+            checks.append(("Correct subnet", False, "Invalid expected_subnet"))
+
+    # Check 4: Gateway assigned and reachable
+    gw = cfg.get("gateway")
+    if gw:
+        reachable = ping_once(gw)
+        checks.append(("Gateway reachable", reachable,
+                        f"{gw} ping: {'OK' if reachable else 'FAIL'}"))
+    else:
+        checks.append(("Gateway reachable", False, "No gateway assigned"))
+
+    # Check 5: Basic connectivity (ping well-known host)
+    net_ok = ping_once("8.8.8.8", timeout=3)
+    checks.append(("Internet reachable", net_ok,
+                    "8.8.8.8 ping: " + ("OK" if net_ok else "FAIL")))
+
+    return checks
+
+print("\n[DHCP Validation]")
+results = validate_dhcp("wlan0", expected_subnet="192.168.1.0/24")
+for name, ok, reason in results:
+    icon = "✓" if ok else "✗"
+    print(f"  [{icon}] {name:25s} {reason}")</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — read_dhcp_lease() from NetworkManager</div>
+      <p>
+        NetworkManager stores DHCP lease information in <code>/var/lib/NetworkManager/</code>.
+        Reading these files gives you the full lease details: server IP, lease time,
+        DNS servers, and domain name — all without running any additional commands.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def read_dhcp_lease(interface="wlan0"):
+    """
+    Read DHCP lease details from NetworkManager's lease file.
+    NM stores leases in /var/lib/NetworkManager/dhclient-&lt;iface&gt;.conf
+    or in newer versions as internal-dhcp-&lt;uuid&gt;.lease
+    """
+    nm_dir = Path("/var/lib/NetworkManager")
+    if not nm_dir.exists():
+        return None
+
+    # Find lease files for this interface
+    for lease_file in nm_dir.glob(f"*{interface}*.lease"):
+        lease = {}
+        try:
+            with open(lease_file) as f:
+                for line in f:
+                    line = line.strip()
+                    # Lease files have: option name value;
+                    m = re.match(r"option\s+(\S+)\s+(.+);", line)
+                    if m:
+                        lease[m.group(1)] = m.group(2).strip('"')
+                    # Also: fixed-address IP;
+                    m2 = re.match(r"fixed-address\s+([\d.]+);", line)
+                    if m2:
+                        lease["fixed-address"] = m2.group(1)
+        except (IOError, PermissionError):
+            continue
+        if lease:
+            return lease
+    return None
+
+lease = read_dhcp_lease("wlan0")
+if lease:
+    print(f"\n[DHCP Lease]")
+    for key, val in lease.items():
+        print(f"  {key:30s}: {val}")</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>A fully healthy DHCP assignment passes all 5 checks with clear reasons.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ python Day22_dhcp_verify.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-dim">[IP Config] {'interface': 'wlan0', 'ip': '192.168.1.42', 'netmask': '255.255.255.0', 'gateway': '192.168.1.1', 'mac': '3c:7c:3f:ab:cd:ef'}</span>
+
+<span class="t-green">[DHCP Validation]</span>
+  [<span class="t-green">✓</span>] IP assigned              192.168.1.42
+  [<span class="t-green">✓</span>] Subnet valid             /24 (255.255.255.0)
+  [<span class="t-green">✓</span>] Correct subnet           192.168.1.42 in 192.168.1.0/24: True
+  [<span class="t-green">✓</span>] Gateway reachable        192.168.1.1 ping: OK
+  [<span class="t-green">✓</span>] Internet reachable       8.8.8.8 ping: OK
+
+<span class="t-blue">[DHCP Lease]</span>
+  fixed-address                 : 192.168.1.42
+  subnet-mask                   : 255.255.255.0
+  routers                       : 192.168.1.1
+  domain-name-servers           : 8.8.8.8, 8.8.4.4
+  dhcp-server-identifier        : 192.168.1.1</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Add DHCP scope and renewal checking to the validation module:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Add a Check 6 to <code>validate_dhcp()</code>:
+          verify that the assigned IP is in the expected subnet AND is not one of the
+          reserved "infrastructure" addresses (e.g., the gateway, .1, .255). Log a
+          WARNING if the client gets an address ending in .1 or .254.</li>
+        <li><strong>Task 2:</strong> Read the lease expiry time from the lease file and
+          compute the remaining lease time in seconds. If the lease expires within
+          60 seconds, trigger a DHCP renew with
+          <code>subprocess.run(["dhclient", "-r", interface])</code> followed by
+          <code>dhclient interface</code>.</li>
+        <li><strong>Bonus:</strong> Write <code>measure_dhcp_time(interface)</code>
+          that times how long DHCP assignment takes: disconnect, reconnect, and measure
+          from the first Association frame to the moment an IP is assigned. This is a
+          real QoE (Quality of Experience) metric for enterprise WLAN deployments.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> Parse the lease expiry with:
+        <code>re.search(r"expire \d+ ([\d/]+\s+[\d:]+);", lease_text)</code>.
+        Convert the date string to a <code>datetime</code> object with
+        <code>datetime.strptime(date_str, "%Y/%m/%d %H:%M:%S")</code>,
+        then compare to <code>datetime.utcnow()</code>.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#d29922; margin-bottom:4px;">
+            Up Next · Day 23
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            DNS Resolution Testing Automation
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            IP and gateway check out — but can you resolve hostnames? Tomorrow you'll
+            use dnspython to measure DNS resolution latency, benchmark four DNS servers,
+            and build a DNS health check function that verifies canary domains resolve correctly.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

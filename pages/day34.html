@@ -1,0 +1,333 @@
+<!-- ============================================================
+     Day 34: OTA Packet Capture Automation
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 34</span>
+      <span class="phase-badge" style="background:rgba(248,81,73,0.15); color:#f85149; border:1px solid rgba(248,81,73,0.3);">
+        Phase 5 · Advanced &amp; CI/CD
+      </span>
+    </div>
+    <h1>OTA Packet Capture —<br>Automating tshark from Python</h1>
+    <p>
+      Wireshark is a GUI tool. tshark is its command-line sibling — and it's scriptable.
+      Today you'll automate Over-The-Air packet captures: start tshark as a subprocess,
+      capture for a defined duration or frame count, stop it programmatically with a
+      context manager, and analyse the resulting PCAP for frame type statistics.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~55 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>subprocess · scapy · pathlib</span></div>
+      <div class="hero-stat"><span>📡</span><span>tshark · PCAP · OTA</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>When Script-Based Captures Beat Wireshark</h3>
+      <p>
+        Manual Wireshark captures require a human to start, wait, and stop. Automated
+        captures run as part of your CI pipeline: start the capture when the test begins,
+        run the connection test, stop the capture when it ends, and analyse the PCAP
+        automatically. This gives you concrete packet-level evidence for every CI run
+        — far more valuable than just pass/fail output.
+      </p>
+
+      <div class="callout">
+        <strong>tshark supports the same capture filters as Wireshark.</strong><br>
+        Use BPF capture filters to reduce file size: <code>-f "wlan type mgt"</code>
+        captures only management frames. Use display filters with <code>-Y</code> to
+        filter PCAP during analysis. The <code>-T fields</code> output format makes
+        tshark output machine-parseable — no regex needed.
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — start_capture(), capture_context(), analyse_pcap()</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>Day34_ota_capture.py</code>. Install tshark:
+        <code>sudo apt install tshark</code> (Linux) or
+        <code>brew install wireshark</code> (macOS).
+      </p>
+
+      <div class="step-label">Block 1 — start_capture() with tshark subprocess</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day34_ota_capture.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 34: OTA Packet Capture Automation
+# Requires: tshark + monitor-mode capable adapter + root
+# =============================================================
+
+import subprocess
+import time
+import signal
+from pathlib import Path
+from scapy.all import rdpcap, Dot11, RadioTap
+from collections import Counter
+
+def start_capture(interface, output_path, capture_filter=None):
+    """
+    Start a tshark capture as a background subprocess.
+    Returns the Popen process object — call .terminate() to stop.
+
+    Args:
+        interface:      Monitor-mode interface (e.g. 'wlan0mon')
+        output_path:    Path to write the PCAP file
+        capture_filter: BPF capture filter string (None = capture all)
+    """
+    cmd = [
+        "tshark",
+        "-i", interface,
+        "-w", str(output_path),  # Write PCAP to file
+        "-q",                    # Quiet mode — suppress per-packet output
+    ]
+    if capture_filter:
+        cmd.extend(["-f", capture_filter])
+
+    print(f"[Capture] Starting: {' '.join(cmd)}")
+
+    # Popen is non-blocking — tshark runs in background while our code continues
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
+    )
+    return proc
+
+def stop_capture(proc):
+    """Stop a tshark capture process gracefully (SIGINT = Ctrl+C)."""
+    if proc and proc.poll() is None:   # Still running
+        proc.send_signal(signal.SIGINT)
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.terminate()
+    print("[Capture] Stopped")</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — capture_context() Context Manager</div>
+      <p>
+        The context manager pattern ensures tshark is always stopped even if the test
+        code inside raises an exception. The captured file is always written cleanly.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">import contextlib
+
+@contextlib.contextmanager
+def capture_context(interface, output_path, capture_filter=None):
+    """
+    Context manager for OTA packet captures.
+
+    Usage:
+        with capture_context("wlan0mon", "test.pcap") as pcap_path:
+            # Run your test here
+            time.sleep(10)
+        # tshark is stopped, PCAP is complete
+        analyse_pcap(pcap_path)
+    """
+    proc = start_capture(interface, output_path, capture_filter)
+    time.sleep(0.5)   # Give tshark time to initialise
+
+    try:
+        yield Path(output_path)   # The test receives the PCAP path
+
+    finally:
+        stop_capture(proc)
+        time.sleep(0.5)   # Allow file write to flush
+
+# Example usage:
+IFACE = "wlan0mon"
+PCAP  = Path("captures/test_capture.pcap")
+PCAP.parent.mkdir(exist_ok=True)
+
+# with capture_context(IFACE, PCAP, "wlan type mgt") as pcap_path:
+#     time.sleep(15)   # Capture for 15 seconds
+# print(f"Captured: {pcap_path} ({pcap_path.stat().st_size} bytes)")</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — analyse_pcap() with Scapy</div>
+      <p>
+        After capturing, analyse the PCAP using Scapy's <code>rdpcap()</code>.
+        Count frame types, extract unique BSSIDs, and measure RSSI distribution.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">FRAME_TYPE_NAMES = {
+    (0, 8): "Beacon", (0, 4): "Probe Req", (0, 5): "Probe Resp",
+    (0, 0): "Assoc Req", (0, 1): "Assoc Resp",
+    (0, 11): "Auth", (0, 12): "Deauth",
+    (2, 0): "Data", (2, 8): "QoS Data",
+}
+
+def analyse_pcap(pcap_path):
+    """
+    Analyse a PCAP file and print statistics.
+    Uses Scapy to read frame types, BSSIDs, and RSSI values.
+    """
+    if not Path(pcap_path).exists():
+        print(f"[Analyse] PCAP not found: {pcap_path}")
+        return {}
+
+    packets = rdpcap(str(pcap_path))
+    print(f"\n[Analyse] {pcap_path}: {len(packets)} frames")
+
+    frame_counts = Counter()
+    bssids       = set()
+    rssi_values  = []
+
+    for pkt in packets:
+        if pkt.haslayer(Dot11):
+            t  = pkt[Dot11].type
+            st = pkt[Dot11].subtype
+            name = FRAME_TYPE_NAMES.get((t, st), f"T{t}/S{st}")
+            frame_counts[name] += 1
+
+            if pkt[Dot11].addr3:
+                bssids.add(pkt[Dot11].addr3)
+
+        if pkt.haslayer(RadioTap):
+            rssi = getattr(pkt[RadioTap], "dBm_AntSignal", None)
+            if rssi:
+                rssi_values.append(rssi)
+
+    print(f"\n[Frame Types]")
+    for frame_type, count in frame_counts.most_common():
+        bar = "█" * min(40, count // 5)
+        print(f"  {frame_type:15s} {count:5d}  {bar}")
+
+    if rssi_values:
+        print(f"\n[RSSI] min={min(rssi_values)} max={max(rssi_values)} "
+              f"avg={sum(rssi_values)/len(rssi_values):.1f} dBm")
+
+    print(f"[BSSIDs] {len(bssids)} unique: {list(bssids)[:3]}...")
+    return {"frame_counts": dict(frame_counts), "bssids": len(bssids)}</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>After a 15-second capture during an AP scan, the analysis shows frame type distribution.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ sudo python Day34_ota_capture.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-green">[Capture] Starting: tshark -i wlan0mon -w captures/test.pcap -q -f "wlan type mgt"</span>
+<span class="t-dim">... capturing for 15 seconds ...</span>
+<span class="t-dim">[Capture] Stopped</span>
+
+<span class="t-blue">[Analyse] captures/test.pcap: 1428 frames</span>
+
+<span class="t-green">[Frame Types]</span>
+  Beacon          1176  <span class="t-green">████████████████████████████████████████</span>
+  Probe Req         87  <span class="t-blue">████████████████████</span>
+  Probe Resp        81  <span class="t-blue">███████████████████</span>
+  Auth              24  <span class="t-dim">████</span>
+  Assoc Req         12  <span class="t-dim">██</span>
+
+<span class="t-dim">[RSSI] min=-87 max=-41 avg=-58.3 dBm</span>
+<span class="t-dim">[BSSIDs] 4 unique: ['AA:BB:CC:01:02:03', 'AA:BB:CC:01:02:04', ...]</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Add pytest integration for capture-backed tests:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Write a pytest test <code>test_no_deauth_storm()</code>
+          that uses <code>capture_context()</code> as a fixture, captures for 30 seconds,
+          then calls <code>analyse_pcap()</code> and asserts that the Deauth frame count
+          is below 10. Any higher count is a potential attack.</li>
+        <li><strong>Task 2:</strong> Write <code>test_beacon_interval_consistent()</code>
+          that captures 200 beacon frames from a target BSSID, computes the actual
+          inter-beacon interval from RadioTap timestamps, and asserts it's between
+          90ms and 120ms (standard is 102.4ms ± 20%).</li>
+        <li><strong>Bonus:</strong> Attach the PCAP file as evidence to the Allure report
+          using <code>allure.attach(pcap_bytes, name="OTA Capture",
+          attachment_type=allure.attachment_type.PCAP)</code> — enabling drill-down
+          into the raw packet data from the Allure UI.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> To compute inter-beacon intervals, sort beacon frames
+        by timestamp (<code>pkt.time</code> attribute in Scapy), then compute
+        <code>[(pkts[i+1].time - pkts[i].time) * 1000 for i in range(len(pkts)-1)]</code>
+        to get a list of intervals in milliseconds. Use <code>statistics.mean()</code>
+        and <code>statistics.stdev()</code> on this list.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#f85149; margin-bottom:4px;">
+            Up Next · Day 35
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Throughput Testing with iPerf3
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            RSSI tells you signal strength. iPerf3 tells you actual throughput.
+            Tomorrow you'll run bidirectional TCP and UDP iPerf3 tests from Python,
+            parse the JSON output for Mbps and jitter, and write pytest assertions
+            against throughput SLA requirements.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

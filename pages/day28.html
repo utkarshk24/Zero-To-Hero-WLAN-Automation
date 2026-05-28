@@ -1,0 +1,311 @@
+<!-- ============================================================
+     Day 28: WLAN Test Cases with PyTest
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 28</span>
+      <span class="phase-badge" style="background:rgba(163,113,247,0.15); color:#a371f7; border:1px solid rgba(163,113,247,0.3);">
+        Phase 4 · Test Frameworks
+      </span>
+    </div>
+    <h1>WLAN Test Cases with PyTest —<br>Real-World Assertions</h1>
+    <p>
+      Today you write the actual test cases that enterprise WLAN engineers care about:
+      every AP above minimum RSSI, no rogue APs in the scan, non-overlapping channel
+      assignments, and WPA2+ security on all SSIDs. These tests will run nightly in
+      your CI pipeline starting Day 38.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~55 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>pytest</span></div>
+      <div class="hero-stat"><span>📡</span><span>RSSI · Rogue AP · Channels</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>From Scripts to Test Cases</h3>
+      <p>
+        Your Phase 3 scripts already validate RSSI and security. The difference with
+        pytest is structure: each validation criterion becomes a named test with a clear
+        pass/fail result, a docstring that explains what it tests and why, and an assertion
+        message that tells you exactly what failed when something goes wrong.
+      </p>
+
+      <div class="callout">
+        <strong>Good test names are documentation.</strong><br>
+        <code>test_all_aps_above_minimum_rssi</code> tells a new engineer exactly what
+        the test verifies without reading the code. When it fails in a CI report,
+        the failure message immediately communicates the problem: "3 APs below -75 dBm
+        threshold." This is the difference between a test that passes CI and one that
+        actually helps engineers diagnose problems.
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — RSSI, Rogue AP, and Channel Tests</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>test_wlan_compliance.py</code>. Each test uses simulated data
+        that you'll replace with real scan results in Day 30.
+      </p>
+
+      <div class="step-label">Block 1 — test_all_aps_above_minimum_rssi()</div>
+      <p>
+        The assertion message in pytest is written after a comma in the assert statement:
+        <code>assert condition, "message"</code>. When the assertion fails, pytest prints
+        this message alongside the variable values — essential for debugging in CI.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">test_wlan_compliance.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 28: WLAN Test Cases with PyTest
+# Run with: pytest test_wlan_compliance.py -v
+# =============================================================
+
+import pytest
+
+# Simulated AP scan results (replace with real scan in Day 30)
+SIMULATED_SCAN = [
+    {"ssid": "CorpWifi-5G",   "bssid": "AA:BB:CC:01:02:03",
+     "rssi": -52, "channel": 36, "security": "WPA2"},
+    {"ssid": "CorpWifi-2G",   "bssid": "AA:BB:CC:01:02:04",
+     "rssi": -68, "channel": 6,  "security": "WPA2"},
+    {"ssid": "GuestWifi",     "bssid": "AA:BB:CC:01:02:05",
+     "rssi": -71, "channel": 11, "security": "WPA2"},
+]
+
+# Expected APs from inventory
+EXPECTED_BSSIDS = {"AA:BB:CC:01:02:03", "AA:BB:CC:01:02:04", "AA:BB:CC:01:02:05"}
+MIN_RSSI        = -75
+
+def test_all_aps_above_minimum_rssi():
+    """
+    All discovered APs must have RSSI above the site minimum threshold.
+    Failing APs are listed in the assertion message for easy debugging.
+    """
+    failing_aps = [
+        f"{ap['ssid']} ({ap['bssid']}): {ap['rssi']} dBm"
+        for ap in SIMULATED_SCAN
+        if ap["rssi"] &lt; MIN_RSSI
+    ]
+    assert len(failing_aps) == 0, (
+        f"APs below {MIN_RSSI} dBm threshold:\n  " + "\n  ".join(failing_aps)
+    )
+
+def test_expected_ap_count():
+    """The number of discovered APs must match the inventory."""
+    discovered_bssids = {ap["bssid"] for ap in SIMULATED_SCAN}
+    assert len(discovered_bssids) == len(EXPECTED_BSSIDS), (
+        f"Expected {len(EXPECTED_BSSIDS)} APs, found {len(discovered_bssids)}"
+    )</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — TestRogueAPDetection Class</div>
+      <p>
+        pytest supports both function-based tests and class-based tests. Classes are
+        useful for grouping related tests that share setup context. No subclassing or
+        inheritance needed — just a class named <code>Test*</code>.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">class TestRogueAPDetection:
+    """Tests for detecting unauthorised APs in the RF environment."""
+
+    def test_no_rogue_bssids(self):
+        """
+        All discovered APs must have BSSIDs in the approved inventory.
+        Any unknown BSSID is a potential rogue AP.
+        """
+        discovered_bssids = {ap["bssid"] for ap in SIMULATED_SCAN}
+        rogue_bssids = discovered_bssids - EXPECTED_BSSIDS
+        assert len(rogue_bssids) == 0, (
+            f"Rogue APs detected with unknown BSSIDs: {rogue_bssids}"
+        )
+
+    def test_no_evil_twin_ssids(self):
+        """
+        Check for APs with our corporate SSID names but unknown BSSIDs
+        (evil twin attack pattern).
+        """
+        corp_ssids     = {"CorpWifi-5G", "CorpWifi-2G", "GuestWifi"}
+        evil_twins     = []
+        for ap in SIMULATED_SCAN:
+            if ap["ssid"] in corp_ssids and ap["bssid"] not in EXPECTED_BSSIDS:
+                evil_twins.append(f"{ap['ssid']} from {ap['bssid']}")
+        assert len(evil_twins) == 0, (
+            f"Potential evil twin APs:\n  " + "\n  ".join(evil_twins)
+        )
+
+    def test_no_open_ssids_matching_corporate_names(self):
+        """Open security on a corporate SSID name is an attack vector."""
+        violations = [
+            f"{ap['ssid']} ({ap['bssid']})"
+            for ap in SIMULATED_SCAN
+            if ap["ssid"].startswith("Corp") and ap["security"] == "Open"
+        ]
+        assert len(violations) == 0, f"Open security on Corp SSID: {violations}"</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — Channel Compliance with @pytest.mark.parametrize</div>
+      <p>
+        <code>@pytest.mark.parametrize</code> generates multiple test cases from a single
+        function. Instead of writing <code>test_channel_1()</code>, <code>test_channel_6()</code>,
+        etc., you write one function and parametrize it. pytest names each case automatically.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">NON_OVERLAPPING_2GHZ = {1, 6, 11}
+
+def test_non_overlapping_channels():
+    """
+    All 2.4 GHz APs must use non-overlapping channels (1, 6, or 11).
+    Adjacent channel interference causes retransmissions and poor performance.
+    """
+    violations = []
+    for ap in SIMULATED_SCAN:
+        ch = ap["channel"]
+        if ch &lt;= 14 and ch not in NON_OVERLAPPING_2GHZ:
+            violations.append(f"{ap['ssid']} on channel {ch}")
+    assert len(violations) == 0, (
+        f"APs on overlapping 2.4 GHz channels:\n  " + "\n  ".join(violations)
+    )
+
+@pytest.mark.parametrize("ssid,expected_security", [
+    ("CorpWifi-5G",  "WPA2"),
+    ("CorpWifi-2G",  "WPA2"),
+    ("GuestWifi",    "WPA2"),
+])
+def test_ssid_security(ssid, expected_security):
+    """Each SSID must use the expected security type."""
+    for ap in SIMULATED_SCAN:
+        if ap["ssid"] == ssid:
+            assert ap["security"] == expected_security, (
+                f"'{ssid}' uses '{ap['security']}' but expected '{expected_security}'"
+            )
+            return
+    pytest.skip(f"SSID '{ssid}' not found in scan — skipping security check")</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>All tests pass with the clean simulated data. Each parametrized case appears as a separate test.</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ pytest test_wlan_compliance.py -v</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-dim">collected 10 items</span>
+
+test_wlan_compliance.py::<span class="t-green">test_all_aps_above_minimum_rssi              PASSED</span>
+test_wlan_compliance.py::<span class="t-green">test_expected_ap_count                      PASSED</span>
+test_wlan_compliance.py::TestRogueAPDetection::<span class="t-green">test_no_rogue_bssids  PASSED</span>
+test_wlan_compliance.py::TestRogueAPDetection::<span class="t-green">test_no_evil_twin_ssids  PASSED</span>
+test_wlan_compliance.py::TestRogueAPDetection::<span class="t-green">test_no_open_ssids_matching_corporate_names  PASSED</span>
+test_wlan_compliance.py::<span class="t-green">test_non_overlapping_channels               PASSED</span>
+test_wlan_compliance.py::<span class="t-green">test_ssid_security[CorpWifi-5G-WPA2]        PASSED</span>
+test_wlan_compliance.py::<span class="t-green">test_ssid_security[CorpWifi-2G-WPA2]        PASSED</span>
+test_wlan_compliance.py::<span class="t-green">test_ssid_security[GuestWifi-WPA2]          PASSED</span>
+
+<span class="t-dim">========================= 9 passed in 0.18s =========================</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Add tests that intentionally fail to practice reading pytest failure output:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Add a rogue AP to <code>SIMULATED_SCAN</code>
+          with BSSID <code>"DE:AD:BE:EF:00:01"</code> and SSID <code>"CorpWifi-5G"</code>.
+          Run the tests. Read the pytest failure output carefully — note how pytest shows
+          the exact assertion message and variable values. Then remove the rogue AP and
+          confirm all tests pass again.</li>
+        <li><strong>Task 2:</strong> Write <code>test_no_duplicate_ssids_on_same_channel()</code>
+          that fails if two APs with the same SSID are broadcasting on the same channel.
+          This is a misconfiguration that causes sticky client issues.</li>
+        <li><strong>Bonus:</strong> Add a <code>@pytest.mark.slow</code> custom mark
+          to tests that would require real hardware to run. Configure pytest to skip
+          all tests with this mark when <code>--fast</code> is passed via a custom
+          pytest option in <code>conftest.py</code>.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> To create a custom mark, add to <code>pytest.ini</code>:
+        <code>[pytest]\nmarkers = slow: mark test as requiring real hardware</code>.
+        Then use <code>@pytest.mark.slow</code> on your test functions.
+        Run with <code>pytest -m "not slow"</code> to skip them.
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#a371f7; margin-bottom:4px;">
+            Up Next · Day 29
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Fixtures &amp; conftest.py — Shared Test Infrastructure
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            Every test module re-imports the same scan data. Tomorrow you'll centralise
+            shared setup in <code>conftest.py</code> fixtures — so your scan runs once,
+            your interface is managed once, and all tests share the same clean state.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

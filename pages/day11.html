@@ -1,0 +1,311 @@
+<!-- ============================================================
+     Day 11: Introduction to Scapy
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
+<div class="day-content">
+
+  <!-- Hero -->
+  <div class="day-hero">
+    <div class="day-hero-meta">
+      <span class="day-number-badge">Day 11</span>
+      <span class="phase-badge" style="background:rgba(63,185,80,0.15); color:#3fb950; border:1px solid rgba(63,185,80,0.3);">
+        Phase 2 · OS &amp; Interfaces
+      </span>
+    </div>
+    <h1>Introduction to Scapy —<br>Building &amp; Sniffing 802.11 Frames</h1>
+    <p>
+      Scapy is the Swiss army knife of packet manipulation — you can build any network
+      frame from scratch, send it, capture live traffic, and read PCAP files, all from
+      Python. Today you'll construct your first Ethernet, ICMP, and 802.11 Probe Request
+      frames, then sniff live packets off the wire.
+    </p>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~60 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>scapy</span></div>
+      <div class="hero-stat"><span>📡</span><span>802.11 frames</span></div>
+    </div>
+  </div>
+
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>What Scapy Can Do That OS Tools Can't</h3>
+      <p>
+        <code>iwconfig</code> tells you the RSSI and SSID of the AP you're connected to.
+        Scapy lets you see every frame flying through the air — management frames from APs
+        you're not connected to, probe requests from client devices, deauthentication frames
+        from potential attackers. This visibility is essential for advanced WLAN testing.
+      </p>
+
+      <div class="callout">
+        <strong>Scapy frames are built like stacked layers.</strong><br>
+        You combine layers with the <code>/</code> operator:
+        <code>Ether() / IP() / ICMP()</code> builds a complete Ethernet→IP→ICMP ping packet.
+        Each layer has sensible defaults, so you only specify what you want to change.
+        This is called a <em>layer stack</em> and directly mirrors the OSI model.
+      </div>
+
+      <h3>The 802.11 Frame Structure</h3>
+      <p>
+        An 802.11 Wi-Fi management frame has three parts: a <strong>RadioTap header</strong>
+        (added by the driver, contains RSSI and channel info), a <strong>Dot11 header</strong>
+        (MAC addresses, frame type/subtype), and a <strong>payload</strong> (varies by
+        subtype — Probe Requests have SSID, Beacons have full AP capabilities). Scapy
+        models each of these as a layer class.
+      </p>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — Building &amp; Capturing Frames</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>Day11_scapy_intro.py</code>. Install Scapy first:
+        <code>pip install scapy</code>. Note: sending and sniffing frames requires
+        root/administrator privileges.
+      </p>
+
+      <div class="step-label">Block 1 — Building an Ethernet/IP/ICMP Packet</div>
+      <p>
+        Start with the familiar — an ICMP ping packet. This teaches the layer-stacking
+        syntax before moving to Wi-Fi-specific frames.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day11_scapy_intro.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># =============================================================
+# Day 11: Introduction to Scapy
+# Run with: sudo python Day11_scapy_intro.py
+# =============================================================
+
+from scapy.all import (Ether, IP, ICMP, Dot11, Dot11ProbeReq,
+                       Dot11Elt, RadioTap, sniff, rdpcap, wrpcap)
+
+# ── Block 1: Building layers with / operator ─────────────────
+
+# Build a ping packet layer by layer
+# Ether(): src/dst MAC addresses (auto-filled from interface)
+# IP(): src/dst IP addresses
+# ICMP(): type=8 means echo request (ping)
+ping_pkt = Ether() / IP(dst="8.8.8.8") / ICMP()
+
+print("[Ping Packet]")
+ping_pkt.show()   # Prints each layer and field with current values
+
+# Access individual fields directly
+print(f"\n  Destination IP  : {ping_pkt[IP].dst}")
+print(f"  ICMP Type       : {ping_pkt[ICMP].type} (8=echo-request)")</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — Building an 802.11 Probe Request Frame</div>
+      <p>
+        A Probe Request is what your device sends when it's searching for known networks.
+        Building one from scratch in Scapy teaches the 802.11 frame structure intimately —
+        and is used in WLAN testing tools to simulate client device behaviour.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># ── Block 2: 802.11 Probe Request frame ──────────────────────
+
+# RadioTap: the physical-layer header added by the Wi-Fi driver
+# Dot11: the main 802.11 MAC header
+#   type=0  → Management frame
+#   subtype=4 → Probe Request
+# Dot11ProbeReq: probe request body
+# Dot11Elt: Information Element (IE) — carries the SSID
+
+probe = (
+    RadioTap() /
+    Dot11(type=0, subtype=4,
+          addr1="ff:ff:ff:ff:ff:ff",   # Broadcast destination
+          addr2="aa:bb:cc:dd:ee:ff",   # Source (our MAC)
+          addr3="ff:ff:ff:ff:ff:ff") / # BSSID = broadcast for probes
+    Dot11ProbeReq() /
+    Dot11Elt(ID="SSID", info="CorpWifi-5G")  # The SSID we're probing for
+)
+
+print("\n[802.11 Probe Request]")
+probe.show()
+print(f"\n  Frame length : {len(probe)} bytes")
+print(f"  SSID in frame: {probe[Dot11Elt].info.decode()}")</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — Sniffing Live Packets</div>
+      <p>
+        <code>sniff()</code> is Scapy's live capture engine. The <code>prn</code> callback
+        fires on every captured packet. <code>count=10</code> stops after 10 packets.
+        For Wi-Fi frame sniffing (Days 12+) you'll need monitor mode — but for now, this
+        captures Ethernet frames on your active interface.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># ── Block 3: sniff() — live packet capture ───────────────────
+
+def packet_handler(pkt):
+    """
+    Called once for every captured packet.
+    Access layers with pkt[LayerClass] or pkt.haslayer(LayerClass).
+    """
+    if pkt.haslayer(IP):
+        src = pkt[IP].src
+        dst = pkt[IP].dst
+        proto = pkt[IP].proto   # 1=ICMP, 6=TCP, 17=UDP
+        print(f"  {src:15s} → {dst:15s}  proto={proto}")
+    elif pkt.haslayer(Ether):
+        print(f"  [Ether] {pkt[Ether].src} → {pkt[Ether].dst}")
+
+print("\n[Sniffing 5 packets on eth0 — Ctrl+C to stop early]")
+# iface="eth0" or "wlan0" depending on your system
+# count=5 stops automatically after 5 packets
+# timeout=10 stops after 10 seconds even if count not reached
+captured = sniff(count=5, timeout=10, prn=packet_handler)
+print(f"[Captured {len(captured)} packets]")</code></pre>
+      </div>
+
+      <div class="step-label">Block 4 — Reading PCAP Files</div>
+      <p>
+        PCAP files are the universal format for packet captures — Wireshark, tcpdump,
+        and tshark all use it. Scapy's <code>rdpcap()</code> reads any PCAP file into
+        a Python list of packets, ready for analysis.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># ── Block 4: Read and write PCAP files ───────────────────────
+
+# Save captured packets to PCAP (viewable in Wireshark)
+wrpcap("day11_capture.pcap", captured)
+print(f"\n[PCAP] Saved {len(captured)} packets to day11_capture.pcap")
+
+# Read back a PCAP file
+packets = rdpcap("day11_capture.pcap")
+print(f"[PCAP] Loaded {len(packets)} packets")
+
+# Analyse frame types
+for i, pkt in enumerate(packets):
+    layers = [layer.__class__.__name__ for layer in pkt.layers()]
+    print(f"  Pkt {i+1}: {' / '.join(layers)}")</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>The frame inspection and sniff output should look like this (exact packets vary).</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ sudo python Day11_scapy_intro.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-green">[Ping Packet]</span>
+<span class="t-dim">###[ Ethernet ]###
+  dst= ff:ff:ff:ff:ff:ff
+###[ IP ]###
+  dst= 8.8.8.8
+###[ ICMP ]###
+  type= echo-request</span>
+
+  Destination IP  : 8.8.8.8
+  ICMP Type       : 8 (8=echo-request)
+
+<span class="t-green">[802.11 Probe Request]</span>
+  Frame length : 38 bytes
+  SSID in frame: <span class="t-blue">CorpWifi-5G</span>
+
+<span class="t-dim">[Sniffing 5 packets on eth0]</span>
+  192.168.1.1     → 192.168.1.42   proto=1
+  192.168.1.42    → 8.8.8.8        proto=17
+  8.8.8.8         → 192.168.1.42   proto=17
+<span class="t-green">[Captured 3 packets]</span>
+<span class="t-blue">[PCAP] Saved 3 packets to day11_capture.pcap</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exercise -->
+  <div class="exercise-card">
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
+    </div>
+    <div class="exercise-card-body">
+      <p>
+        Deepen your Scapy knowledge by analysing captured packets:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Modify <code>packet_handler()</code> to count packets
+          by protocol (TCP, UDP, ICMP) and print a summary table when sniffing ends.
+          Use a <code>Counter</code> dict that you pass in via a closure or global.</li>
+        <li><strong>Task 2:</strong> Build a complete 802.11 Beacon frame using
+          <code>Dot11(type=0, subtype=8)</code> with an SSID Information Element,
+          a supported rates IE (<code>ID="Rates"</code>), and a channel IE. Check
+          the Scapy docs for the correct Dot11 layer names.</li>
+        <li><strong>Bonus:</strong> Load a real PCAP file (capture some traffic with
+          <code>tcpdump -w test.pcap</code>) and write a script that prints all unique
+          source IPs and counts how many packets each one sent.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> <code>pkt.summary()</code> gives a one-line description
+        of any Scapy packet. Use it in your handler to quickly see what's in the capture
+        without calling <code>.show()</code> (which is verbose).
+      </div>
+    </div>
+  </div>
+
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#3fb950; margin-bottom:4px;">
+            Up Next · Day 12
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Monitor Mode &amp; Frame Sniffing
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            Today you used managed mode. Tomorrow you switch your adapter to monitor mode —
+            the only way to see all 802.11 frames in the air, including beacons, probe
+            requests, and management frames from every AP in range.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

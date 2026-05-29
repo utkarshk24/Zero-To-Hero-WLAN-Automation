@@ -15,7 +15,7 @@ const CURRICULUM = [
       { day: 2,  title: "Variables, Data Types & First Script", file: "pages/day2.html",  status: "available" },
       { day: 3,  title: "Control Flow for Network Logic",       file: "pages/day3.html",  status: "available" },
       { day: 4,  title: "Functions: Reusable Building Blocks",  file: "pages/day4.html",  status: "available" },
-      { day: 5,  title: "pip, Virtual Envs & Library Ecosystem",file: "pages/day5.html",  status: "coming-soon" },
+      { day: 5,  title: "pip, Virtual Envs & Library Ecosystem",file: "pages/day5.html",  status: "available" },
       { day: 6,  title: "File I/O: Reading & Writing Test Logs",file: "pages/day6.html",  status: "coming-soon" },
       { day: 7,  title: "JSON & YAML: Config File Parsing",     file: "pages/day7.html",  status: "coming-soon" },
       { day: 8,  title: "Phase 1 Capstone: WLAN Config Parser", file: "pages/day8.html",  status: "coming-soon", capstone: true },

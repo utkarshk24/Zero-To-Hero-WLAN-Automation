@@ -2,6 +2,19 @@
 //  app.js — Sidebar builder, content loader, copy buttons
 // ============================================================
 
+// ---- Course start date (Day 1 launch) ----------------------
+const COURSE_START_DATE = '2026-05-25'; // YYYY-MM-DD, local time
+
+function getAvailableDayCount() {
+  const start   = new Date(COURSE_START_DATE + 'T00:00:00');
+  const elapsed = Math.floor((Date.now() - start.getTime()) / 86400000);
+  return Math.min(40, Math.max(1, elapsed + 1));
+}
+
+function isDayAvailable(d) {
+  return d.day <= getAvailableDayCount();
+}
+
 // ---- Helpers -----------------------------------------------
 function zeroPad(n) { return String(n).padStart(2, '0'); }
 
@@ -40,7 +53,7 @@ function buildSidebar() {
     const daysContainer = group.querySelector('.phase-days');
     phase.days.forEach(d => {
       const item = document.createElement('div');
-      item.className = 'day-item' + (d.status === 'coming-soon' ? ' locked' : '');
+      item.className = 'day-item' + (!isDayAvailable(d) ? ' locked' : '');
       item.dataset.day = d.day;
       item.style.setProperty('--phase-color', phase.color);
 
@@ -49,11 +62,11 @@ function buildSidebar() {
         <span class="day-label">${d.title}</span>
         ${d.capstone
           ? `<span class="capstone-tag">Cap</span>`
-          : (d.status === 'coming-soon' ? `<span class="day-badge">Soon</span>` : '')
+          : (!isDayAvailable(d) ? `<span class="day-badge">Soon</span>` : '')
         }
       `;
 
-      if (d.status === 'available') {
+      if (isDayAvailable(d)) {
         item.addEventListener('click', () => loadDay(d.day));
       }
       daysContainer.appendChild(item);
@@ -96,7 +109,7 @@ function trackDayView(dayNum, meta) {
     day_title  : meta.title,
     phase      : meta.phaseData.phase,
     phase_title: meta.phaseData.title,
-    status     : meta.status   // 'available' or 'coming-soon'
+    status     : isDayAvailable(meta) ? 'available' : 'coming-soon'
   });
 }
 
@@ -122,7 +135,7 @@ async function loadDay(dayNum) {
   setQueryDay(dayNum);
   setActiveDay(dayNum);
 
-  if (meta.status === 'coming-soon') {
+  if (!isDayAvailable(meta)) {
     showComingSoon(meta, content);
     if (topTitle) topTitle.textContent = `Day ${dayNum} — Coming Soon`;
     trackDayView(dayNum, meta);
@@ -246,7 +259,7 @@ function initMobileSidebar() {
 // ---- Progress bar ------------------------------------------
 function updateProgress(dayNum) {
   const total = 40;
-  const available = CURRICULUM.flatMap(p => p.days).filter(d => d.status === 'available').length;
+  const available = getAvailableDayCount();
   const pct = Math.max(2.5, (available / total) * 100);
   const fill = document.getElementById('progress-fill');
   const text = document.getElementById('progress-text');

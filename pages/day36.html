@@ -2,28 +2,32 @@
 
   <div class="day-hero">
     <div class="day-hero-meta">
-      <span class="day-tag">Day 36</span>
-      <span class="phase-tag phase-5">Phase 5 — Advanced Scenarios &amp; CI/CD</span>
+      <span class="day-number-badge">Day 36</span>
+      <span class="phase-badge" style="background:rgba(248,81,73,0.15); color:#f85149; border:1px solid rgba(248,81,73,0.3);">
+        Phase 5 — Advanced Scenarios &amp; CI/CD
+      </span>
     </div>
-    <h1 class="day-hero-title">Roaming Test Automation (802.11r/k/v)</h1>
-    <p class="day-hero-sub">
+    <h1>Roaming Test Automation (802.11r/k/v)</h1>
+    <p>
       Enterprise WLAN certification requires measurable roaming performance. Today you'll
       automate roaming triggers, measure roaming latency, verify BSS Transition Management,
       and validate that 802.11r Fast Transition keeps interruption under 50 ms.
     </p>
-    <div class="day-hero-tags">
-      <span class="tag">802.11r</span>
-      <span class="tag">802.11k</span>
-      <span class="tag">802.11v</span>
-      <span class="tag">Roaming Latency</span>
-      <span class="tag">BSS Transition</span>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~55 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📡</span><span>iw · wpa_cli</span></div>
+      <div class="hero-stat"><span>🔄</span><span>802.11r/k/v · BTM</span></div>
     </div>
   </div>
 
   <div class="section-card">
-    <h2 class="section-title">Roaming Standards Reference</h2>
-    <div class="requirements-table">
-      <table>
+    <div class="section-card-header">
+      <span class="section-icon">📋</span>
+      <h2>Roaming Standards Reference</h2>
+    </div>
+    <div class="section-card-body">
+      <table class="req-table">
         <thead><tr><th>Standard</th><th>Name</th><th>What it does</th></tr></thead>
         <tbody>
           <tr><td>802.11r</td><td>Fast BSS Transition (FT)</td><td>Pre-authenticates to the target AP — reduces roaming latency to &lt;50 ms</td></tr>
@@ -35,10 +39,14 @@
   </div>
 
   <div class="section-card">
-    <h2 class="section-title">1 — Detecting Roaming Capability</h2>
-    <div class="code-block-wrapper">
+    <div class="section-card-header">
+      <span class="section-icon">🔍</span>
+      <h2>1 — Detecting Roaming Capability</h2>
+    </div>
+    <div class="section-card-body">
+      <div class="code-block-wrapper">
       <div class="code-block-header">
-        <span class="code-lang">python</span>
+        <span class="code-block-lang">python</span>
         <button class="copy-btn">Copy</button>
       </div>
       <pre><code class="language-python">
@@ -67,14 +75,19 @@ def get_current_bssid(interface="wlan0"):
     m = re.search(r"Connected to ([0-9a-f:]{17})", r.stdout, re.IGNORECASE)
     return m.group(1).upper() if m else None
       </code></pre>
+      </div>
     </div>
   </div>
 
   <div class="section-card">
-    <h2 class="section-title">2 — Measuring Roaming Latency</h2>
+    <div class="section-card-header">
+      <span class="section-icon">⏱</span>
+      <h2>2 — Measuring Roaming Latency</h2>
+    </div>
+    <div class="section-card-body">
     <div class="code-block-wrapper">
       <div class="code-block-header">
-        <span class="code-lang">python</span>
+        <span class="code-block-lang">python</span>
         <button class="copy-btn">Copy</button>
       </div>
       <pre><code class="language-python">
@@ -117,14 +130,19 @@ def trigger_roam_via_btm(interface="wlan0", target_bssid=None):
 # latency, err = measure_roaming_latency("wlan0", timeout=5)
 # print(f"Roaming latency: {latency} ms")
       </code></pre>
+      </div>
     </div>
   </div>
 
   <div class="section-card">
-    <h2 class="section-title">3 — Roaming Test with PyTest</h2>
+    <div class="section-card-header">
+      <span class="section-icon">✅</span>
+      <h2>3 — Roaming Test with PyTest</h2>
+    </div>
+    <div class="section-card-body">
     <div class="code-block-wrapper">
       <div class="code-block-header">
-        <span class="code-lang">python</span>
+        <span class="code-block-lang">python</span>
         <button class="copy-btn">Copy</button>
       </div>
       <pre><code class="language-python">
@@ -151,17 +169,20 @@ def test_roaming_latency():
         f"Roaming too slow: {latency} ms > {ROAMING_LATENCY_LIMIT_MS} ms"
     assert before != after, "BSSID did not change — no roaming occurred"
       </code></pre>
+      </div>
     </div>
   </div>
 
   <div class="exercise-card">
-    <div class="exercise-header">
+    <div class="exercise-card-header">
       <span class="exercise-icon">🏋️</span>
-      <h3 class="exercise-title">Day 36 Exercise</h3>
+      <h3>Day 36 Exercise</h3>
     </div>
-    <p>Write a <code>roaming_stress_test(rounds=10)</code> that triggers roaming 10 times between
-    two APs, records the latency for each roam, and reports mean/min/max. Flag any roam that
-    exceeded 200 ms as a failure. Save results to CSV.</p>
+    <div class="exercise-card-body">
+      <p>Write a <code>roaming_stress_test(rounds=10)</code> that triggers roaming 10 times between
+      two APs, records the latency for each roam, and reports mean/min/max. Flag any roam that
+      exceeded 200 ms as a failure. Save results to CSV.</p>
+    </div>
   </div>
 
 </div>

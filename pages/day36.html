@@ -1,13 +1,18 @@
+<!-- ============================================================
+     Day 36: Roaming Test Automation (802.11r/k/v)
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
 <div class="day-content">
 
+  <!-- Hero -->
   <div class="day-hero">
     <div class="day-hero-meta">
       <span class="day-number-badge">Day 36</span>
       <span class="phase-badge" style="background:rgba(248,81,73,0.15); color:#f85149; border:1px solid rgba(248,81,73,0.3);">
-        Phase 5 — Advanced Scenarios &amp; CI/CD
+        Phase 5 · Advanced Scenarios &amp; CI/CD
       </span>
     </div>
-    <h1>Roaming Test Automation (802.11r/k/v)</h1>
+    <h1>Roaming Test Automation<br>(802.11r/k/v)</h1>
     <p>
       Enterprise WLAN certification requires measurable roaming performance. Today you'll
       automate roaming triggers, measure roaming latency, verify BSS Transition Management,
@@ -21,6 +26,176 @@
     </div>
   </div>
 
+  <!-- The Why -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>Manual Roaming vs. Automated Roaming Tests</h3>
+      <p>
+        Manual roaming testing: you walk your device from one AP to another, watch the
+        connection drop briefly, wait for reassociation, then record a vague note like
+        "roaming worked" in your lab notebook. You do this 5 times because the first 3
+        times your notes are incomplete.
+      </p>
+      <p>
+        Automated roaming testing: your script triggers a roam, measures latency with
+        millisecond precision, captures the frame exchange with Wireshark, logs the
+        BSSID before and after, and reports: "Roamed from AP-01 to AP-02 in 45 ms,
+        zero packet loss, 802.11r pre-auth confirmed."
+      </p>
+
+      <div class="callout">
+        <strong>802.11r/k/v are the roaming standards enterprise expects.</strong><br>
+        802.11r (Fast Roaming) pre-authenticates so roaming takes &lt;50 ms.
+        802.11k (Neighbor Reports) gives clients a list of APs to prefer.
+        802.11v (BSS Transition Management) lets the AP suggest or force a roam.
+        If your APs don't support these, your tests will show it.
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — Detecting &amp; Measuring Roaming</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Create <code>Day36_roaming_test.py</code>. You'll need two APs in roaming range,
+        <code>iw</code> installed, and wpa_cli access.
+      </p>
+
+      <div class="step-label">Block 1 — Detecting Roaming Capabilities (802.11r/k/v)</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day36_roaming_test.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">import subprocess, re, time
+
+def check_roaming_capabilities(interface="wlan0"):
+    """Check which 802.11r/k/v capabilities are active on the current connection."""
+    result = subprocess.run(
+        ["iw", "dev", interface, "link"],
+        capture_output=True, text=True
+    )
+    output = result.stdout.lower()
+    caps = {
+        "802.11r_ft":  "ft" in output or "fast-transition" in output,
+        "802.11k_rrm": "rrm" in output or "radio-resource" in output,
+        "802.11v_btm": "bss-trans" in output or "btm" in output,
+    }
+    print(f"\n[Roaming Capabilities for {interface}]")
+    for cap, supported in caps.items():
+        status = "✓ Supported" if supported else "✗ Not detected"
+        print(f"  {cap:15s}: {status}")
+    return caps
+
+
+def get_current_bssid(interface="wlan0"):
+    """Return the BSSID of the currently associated AP."""
+    r = subprocess.run(["iw", "dev", interface, "link"], capture_output=True, text=True)
+    m = re.search(r"Connected to ([0-9a-f:]{17})", r.stdout, re.IGNORECASE)
+    return m.group(1).upper() if m else None</code></pre>
+      </div>
+
+      <div class="step-label">Block 2 — Measuring Roaming Latency</div>
+      <p>
+        Measure the time from the original BSSID to the target BSSID. Roaming latency
+        is the time a device takes to disconnect from one AP and connect to another.
+        Enterprise targets: &lt;50 ms (with 802.11r), conservative: &lt;150 ms.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day36_roaming_test.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">def measure_roaming_latency(interface="wlan0", target_bssid=None, timeout=10):
+    """
+    Measure time from current BSSID → new BSSID (in milliseconds).
+    Returns (latency_ms, error_string) tuple.
+    """
+    original_bssid = get_current_bssid(interface)
+    if not original_bssid:
+        return None, "Not connected"
+
+    print(f"\n[Roaming Monitor] Tracking roam from {original_bssid}...")
+    start = time.perf_counter()
+    deadline = start + timeout
+
+    while time.perf_counter() < deadline:
+        current = get_current_bssid(interface)
+        if current and current != original_bssid:
+            if target_bssid is None or current == target_bssid.upper():
+                latency = (time.perf_counter() - start) * 1000
+                print(f"  Roamed to {current} in {latency:.1f} ms")
+                return round(latency, 1), None
+        time.sleep(0.01)   # 10 ms polling interval
+
+    return None, f"No roam detected within {timeout}s"
+
+
+def trigger_roam_via_btm(interface="wlan0", target_bssid=None):
+    """Send BSS Transition Management request to trigger a roam via wpa_cli."""
+    cmd = ["wpa_cli", "-i", interface, "roam"]
+    if target_bssid:
+        cmd.append(target_bssid)
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    print(f"[Roam Trigger] Command: {' '.join(cmd)}")
+    print(f"[Roam Trigger] Response: {result.stdout.strip()}")</code></pre>
+      </div>
+
+      <div class="step-label">Block 3 — PyTest Integration with Allure</div>
+      <p>
+        Wire roaming tests into your pytest suite. Use fixtures to capture pre/post
+        BSSID state, measure latency, and assert SLA compliance.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">Python</span>
+          <span class="code-block-filename">Day36_roaming_test.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">import pytest, allure
+
+ROAMING_LATENCY_LIMIT_MS = 150   # Wi-Fi 6 target: &lt;50 ms; conservative: &lt;150 ms
+
+@allure.feature("Roaming")
+@allure.severity(allure.severity_level.CRITICAL)
+@pytest.mark.live
+def test_roaming_latency():
+    """Verify roaming completes within the SLA."""
+    check_roaming_capabilities("wlan0")
+
+    before = get_current_bssid("wlan0")
+    allure.attach(f"Source BSSID: {before}", name="Pre-roam state")
+    print(f"\n[Test] Starting roam from {before}...")
+
+    trigger_roam_via_btm("wlan0")
+    latency, err = measure_roaming_latency("wlan0", timeout=5)
+
+    after = get_current_bssid("wlan0")
+    allure.attach(f"Target BSSID: {after}\nLatency: {latency} ms", name="Post-roam state")
+
+    assert err is None, f"Roaming failed: {err}"
+    assert latency <= ROAMING_LATENCY_LIMIT_MS, \
+        f"Roaming too slow: {latency} ms > {ROAMING_LATENCY_LIMIT_MS} ms"
+    assert before != after, "BSSID did not change — no roaming occurred"
+    print(f"✓ Test passed. Roaming latency: {latency} ms")</code></pre>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Standards Reference -->
   <div class="section-card">
     <div class="section-card-header">
       <span class="section-icon">📋</span>
@@ -38,151 +213,97 @@
     </div>
   </div>
 
+  <!-- Expected Output -->
   <div class="section-card">
     <div class="section-card-header">
-      <span class="section-icon">🔍</span>
-      <h2>1 — Detecting Roaming Capability</h2>
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
     </div>
     <div class="section-card-body">
-      <div class="code-block-wrapper">
-      <div class="code-block-header">
-        <span class="code-block-lang">python</span>
-        <button class="copy-btn">Copy</button>
-      </div>
-      <pre><code class="language-python">
-import subprocess, re
+      <p>Running the roaming test with two APs in range:</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">~/wlan-automation-course $ python Day36_roaming_test.py</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-green">[Roaming Capabilities for wlan0]</span>
+  <span class="t-blue">802.11r_ft    : ✓ Supported</span>
+  <span class="t-blue">802.11k_rrm   : ✓ Supported</span>
+  <span class="t-blue">802.11v_btm   : ✓ Supported</span>
 
-def check_roaming_capabilities(interface="wlan0"):
-    """Check which 802.11r/k/v capabilities are active on the current connection."""
-    result = subprocess.run(
-        ["iw", "dev", interface, "link"],
-        capture_output=True, text=True
-    )
-    output = result.stdout.lower()
-    caps = {
-        "802.11r_ft":  "ft" in output or "fast-transition" in output,
-        "802.11k_rrm": "rrm" in output or "radio-resource" in output,
-        "802.11v_btm": "bss-trans" in output or "btm" in output,
-    }
-    for cap, supported in caps.items():
-        print(f"  {cap}: {'Supported' if supported else 'Not detected'}")
-    return caps
+<span class="t-green">[Test] Starting roam from AA:BB:CC:01:02:03...</span>
 
+<span class="t-green">[Roam Trigger] Command: wpa_cli -i wlan0 roam AA:BB:CC:01:02:04</span>
+<span class="t-dim">[Roam Trigger] Response: OK</span>
 
-def get_current_bssid(interface="wlan0"):
-    """Return the BSSID of the currently associated AP."""
-    r = subprocess.run(["iw", "dev", interface, "link"], capture_output=True, text=True)
-    m = re.search(r"Connected to ([0-9a-f:]{17})", r.stdout, re.IGNORECASE)
-    return m.group(1).upper() if m else None
-      </code></pre>
+<span class="t-green">[Roaming Monitor] Tracking roam from AA:BB:CC:01:02:03...</span>
+<span class="t-blue">  Roamed to AA:BB:CC:01:02:04 in 42.3 ms</span>
+
+<span class="t-dim">[Test] Starting roam from AA:BB:CC:01:02:04...</span>
+<span class="t-green">✓ Test passed. Roaming latency: 42.3 ms</span></pre>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="section-card">
-    <div class="section-card-header">
-      <span class="section-icon">⏱</span>
-      <h2>2 — Measuring Roaming Latency</h2>
-    </div>
-    <div class="section-card-body">
-    <div class="code-block-wrapper">
-      <div class="code-block-header">
-        <span class="code-block-lang">python</span>
-        <button class="copy-btn">Copy</button>
-      </div>
-      <pre><code class="language-python">
-import time, threading
-
-def measure_roaming_latency(interface="wlan0", target_bssid=None, timeout=10):
-    """
-    Measure time from current BSSID → new BSSID.
-    Returns latency_ms or None on timeout.
-    """
-    original_bssid = get_current_bssid(interface)
-    if not original_bssid:
-        return None, "Not connected"
-
-    print(f"Monitoring roam from {original_bssid}...")
-    start = time.perf_counter()
-    deadline = start + timeout
-
-    while time.perf_counter() < deadline:
-        current = get_current_bssid(interface)
-        if current and current != original_bssid:
-            if target_bssid is None or current == target_bssid.upper():
-                latency = (time.perf_counter() - start) * 1000
-                return round(latency, 1), None
-        time.sleep(0.01)   # 10 ms poll
-
-    return None, f"No roam detected within {timeout}s"
-
-
-def trigger_roam_via_btm(interface="wlan0", target_bssid=None):
-    """Send BSS Transition Management request to trigger a roam (wpa_cli)."""
-    cmd = ["wpa_cli", "-i", interface, "roam"]
-    if target_bssid:
-        cmd.append(target_bssid)
-    subprocess.run(cmd, capture_output=True)
-
-
-# Test flow:
-# trigger_roam_via_btm("wlan0", "00:11:22:33:44:02")
-# latency, err = measure_roaming_latency("wlan0", timeout=5)
-# print(f"Roaming latency: {latency} ms")
-      </code></pre>
-      </div>
-    </div>
-  </div>
-
-  <div class="section-card">
-    <div class="section-card-header">
-      <span class="section-icon">✅</span>
-      <h2>3 — Roaming Test with PyTest</h2>
-    </div>
-    <div class="section-card-body">
-    <div class="code-block-wrapper">
-      <div class="code-block-header">
-        <span class="code-block-lang">python</span>
-        <button class="copy-btn">Copy</button>
-      </div>
-      <pre><code class="language-python">
-import pytest, allure
-
-ROAMING_LATENCY_LIMIT_MS = 150   # Wi-Fi 6 typical target: &lt;50 ms, conservative: &lt;150 ms
-
-@allure.feature("Roaming")
-@allure.severity(allure.severity_level.CRITICAL)
-@pytest.mark.live
-def test_roaming_latency():
-    """Roaming must complete within the latency limit."""
-    before = get_current_bssid("wlan0")
-    allure.attach(f"Source BSSID: {before}", name="Pre-roam state")
-
-    trigger_roam_via_btm("wlan0")
-    latency, err = measure_roaming_latency("wlan0", timeout=5)
-
-    after = get_current_bssid("wlan0")
-    allure.attach(f"Target BSSID: {after}\nLatency: {latency} ms", name="Post-roam state")
-
-    assert err is None, f"Roaming failed: {err}"
-    assert latency <= ROAMING_LATENCY_LIMIT_MS, \
-        f"Roaming too slow: {latency} ms > {ROAMING_LATENCY_LIMIT_MS} ms"
-    assert before != after, "BSSID did not change — no roaming occurred"
-      </code></pre>
-      </div>
-    </div>
-  </div>
-
+  <!-- Exercise -->
   <div class="exercise-card">
     <div class="exercise-card-header">
-      <span class="exercise-icon">🏋️</span>
-      <h3>Day 36 Exercise</h3>
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
     </div>
     <div class="exercise-card-body">
-      <p>Write a <code>roaming_stress_test(rounds=10)</code> that triggers roaming 10 times between
-      two APs, records the latency for each roam, and reports mean/min/max. Flag any roam that
-      exceeded 200 ms as a failure. Save results to CSV.</p>
+      <p>
+        Build a roaming stress test that validates AP handover reliability:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Write <code>roaming_stress_test(rounds=10)</code>
+          that triggers roaming 10 times between two APs, records the latency for each
+          roam, computes mean/min/max latency, and flags any roam exceeding 200 ms as
+          a failure. Save results to CSV with columns: round, latency_ms, pass/fail.</li>
+        <li><strong>Task 2:</strong> Write <code>test_roaming_with_traffic()</code>
+          that starts an iPerf3 UDP stream <strong>before</strong> the roam, triggers
+          roaming mid-stream, measures latency, and asserts zero packet loss during
+          the transition (iPerf3 reports packet loss).</li>
+        <li><strong>Bonus:</strong> Attach the roaming latency CSV to Allure using
+          <code>allure.attach(csv_content, name="Roaming Latencies",
+          attachment_type=allure.attachment_type.CSV)</code> — stakeholders can download
+          and analyze trends across multiple test runs.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> Use Python's <code>statistics</code> module:
+        <code>statistics.mean(latencies)</code>, <code>statistics.stdev(latencies)</code>,
+        and <code>min()/max()</code> to compute roaming metrics. Write results to CSV
+        with <code>csv.DictWriter</code>.
+      </div>
     </div>
   </div>
 
-</div>
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#f85149; margin-bottom:4px;">
+            Up Next · Day 37
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Intro to GitHub Actions CI/CD
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            Your test suite is bulletproof. Today you'll wire it into GitHub Actions
+            so tests run automatically on every push, every PR, and on a nightly schedule.
+            Your code never lands without validation.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

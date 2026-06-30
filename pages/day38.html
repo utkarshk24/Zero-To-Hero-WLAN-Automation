@@ -1,45 +1,92 @@
+<!-- ============================================================
+     Day 38: WLAN Tests in Nightly CI Pipelines
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
 <div class="day-content">
 
+  <!-- Hero -->
   <div class="day-hero">
     <div class="day-hero-meta">
-      <span class="day-tag">Day 38</span>
-      <span class="phase-tag phase-5">Phase 5 — Advanced Scenarios &amp; CI/CD</span>
+      <span class="day-number-badge">Day 38</span>
+      <span class="phase-badge" style="background:rgba(248,81,73,0.15); color:#f85149; border:1px solid rgba(248,81,73,0.3);">
+        Phase 5 · Advanced Scenarios &amp; CI/CD
+      </span>
     </div>
-    <h1 class="day-hero-title">WLAN Tests in Nightly CI Pipelines</h1>
-    <p class="day-hero-sub">
+    <h1>WLAN Tests in Nightly<br>CI Pipelines</h1>
+    <p>
       On-push CI catches code bugs. Nightly CI catches environmental regressions — APs that
       drifted, DHCP servers that changed, new interference sources. Today you'll set up
-      a scheduled nightly test pipeline with threshold tracking and email/Slack alerts.
+      a scheduled nightly test pipeline with trend tracking and email/Slack alerts.
     </p>
-    <div class="day-hero-tags">
-      <span class="tag">Scheduled Cron</span>
-      <span class="tag">Nightly Tests</span>
-      <span class="tag">Trend Tracking</span>
-      <span class="tag">Baseline Delta</span>
-      <span class="tag">Alerts</span>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~55 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📅</span><span>cron · scheduled workflows</span></div>
+      <div class="hero-stat"><span>🚨</span><span>Alerts · trend tracking</span></div>
     </div>
   </div>
 
+  <!-- The Why -->
   <div class="section-card">
-    <h2 class="section-title">1 — Nightly Scheduled Workflow</h2>
-    <div class="code-block-wrapper">
-      <div class="code-block-header">
-        <span class="code-lang">bash</span>
-        <button class="copy-btn">Copy</button>
-      </div>
-      <pre><code class="language-bash">
-# .github/workflows/nightly.yml
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
 
-name: Nightly WLAN Regression
+      <h3>On-Push CI vs. Nightly CI</h3>
+      <p>
+        On-push CI runs when developers commit. It catches code bugs: "Did I break something
+        when I refactored the DHCP validation function?" Nightly CI runs on a schedule and
+        tests the environment: "Did an AP firmware update change beacon behavior? Did the
+        DHCP server get reconfigured? Is there new interference?"
+      </p>
+      <p>
+        Environmental regressions happen silently. Your code works fine, but the lab APs
+        degrade or network configs change. Nightly tests catch these shifts before they
+        impact production.
+      </p>
+
+      <div class="callout">
+        <strong>Trend-based alerting is smarter than hard thresholds.</strong><br>
+        An RSSI of -65 dBm might be normal for AP-01 but low for AP-02. Instead of
+        hardcoding "alert if RSSI &lt; -70," compare today's RSSI to the rolling average
+        of the past 7 days. Alert only if it dropped by 5+ dBm — a real regression.
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — Nightly Workflows &amp; Alerts</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Nightly workflows run on a schedule (GitHub Actions cron syntax) and can use
+        <code>self-hosted</code> runners (your lab machines with Wi-Fi hardware). They
+        measure baselines, detect regressions, and alert via email or Slack.
+      </p>
+
+      <div class="step-label">Block 1 — Scheduled Nightly Workflow</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">yaml</span>
+          <span class="code-block-filename">.github/workflows/nightly.yml</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-yaml">name: Nightly WLAN Regression
 
 on:
   schedule:
     - cron: '0 23 * * *'   # 11 PM UTC every night
-  workflow_dispatch:         # manual trigger
+  workflow_dispatch:         # manual trigger from GitHub UI
 
 jobs:
   nightly-regression:
-    runs-on: self-hosted   # must be your lab machine with Wi-Fi
+    runs-on: self-hosted   # must be your lab machine with Wi-Fi hardware
     timeout-minutes: 60
 
     steps:
@@ -65,20 +112,21 @@ jobs:
         with:
           name: nightly-report-${{ github.run_number }}
           path: reports/
-          retention-days: 30
-      </code></pre>
-    </div>
-  </div>
-
-  <div class="section-card">
-    <h2 class="section-title">2 — Tracking RSSI Trends Across Nightly Runs</h2>
-    <div class="code-block-wrapper">
-      <div class="code-block-header">
-        <span class="code-lang">python</span>
-        <button class="copy-btn">Copy</button>
+          retention-days: 30</code></pre>
       </div>
-      <pre><code class="language-python">
-import json, datetime, os
+
+      <div class="step-label">Block 2 — Tracking RSSI Trends Across Nightly Runs</div>
+      <p>
+        Store RSSI readings in a JSON file. Compare today's readings to the 7-day
+        rolling average. If any AP's signal dropped &gt;5 dBm, flag it as a regression.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">python</span>
+          <span class="code-block-filename">Day38_nightly_trends.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">import json, datetime, os
 
 TREND_FILE = "reports/rssi_trend.json"
 
@@ -102,6 +150,9 @@ def detect_rssi_regression(ssid, window=7, drop_threshold=5):
     Alert if an AP's average RSSI dropped by more than drop_threshold dBm
     compared to the rolling average of the last 'window' days.
     """
+    if not os.path.exists(TREND_FILE):
+        return None
+
     with open(TREND_FILE) as f:
         trend = json.load(f)
 
@@ -122,20 +173,21 @@ def detect_rssi_regression(ssid, window=7, drop_threshold=5):
         print(f"  ⚠️  REGRESSION: {ssid} RSSI dropped {delta:.1f} dB "
               f"(baseline: {baseline:.1f}, today: {latest})")
         return delta
-    return None
-      </code></pre>
-    </div>
-  </div>
-
-  <div class="section-card">
-    <h2 class="section-title">3 — Sending a Nightly Alert Email</h2>
-    <div class="code-block-wrapper">
-      <div class="code-block-header">
-        <span class="code-lang">python</span>
-        <button class="copy-btn">Copy</button>
+    return None</code></pre>
       </div>
-      <pre><code class="language-python">
-import smtplib, os
+
+      <div class="step-label">Block 3 — Sending Nightly Alert Emails</div>
+      <p>
+        After the nightly tests complete, check for failures or regressions. If found,
+        send an alert email with details. Use environment variables for SMTP credentials.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">python</span>
+          <span class="code-block-filename">Day38_nightly_trends.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">import smtplib, os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -159,26 +211,174 @@ def send_alert(subject, body, to_email):
     print(f"Alert sent to {to_email}")
 
 
-# Example: trigger alert if any test failed
 def nightly_alert_if_failed(results, to_email):
+    """Alert if any test failed."""
     failed = [r["ssid"] for r in results if r["result"] != "PASS"]
     if failed:
         subject = f"[WLAN CI] {len(failed)} test(s) FAILED — {datetime.date.today()}"
-        body    = f"Failed APs:\n" + "\n".join(f"  - {s}" for s in failed)
-        send_alert(subject, body, to_email)
-      </code></pre>
+        body    = f"Failed SSID(s):\n" + "\n".join(f"  - {s}" for s in failed)
+        send_alert(subject, body, to_email)</code></pre>
+      </div>
+
+      <div class="step-label">Block 4 — Post-Test Hook (conftest.py)</div>
+      <p>
+        Use pytest's <code>pytest_sessionfinish</code> hook to run custom logic after
+        all tests complete. Read JUnit XML, count failures, and trigger alerts.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">python</span>
+          <span class="code-block-filename">conftest.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">import pytest, os, xml.etree.ElementTree as ET
+from datetime import date
+from Day38_nightly_trends import send_alert
+
+def pytest_sessionfinish(session, exitstatus):
+    """Hook that runs after all tests complete."""
+    # Only alert for nightly runs
+    if os.environ.get("TEST_ENV") != "nightly":
+        return
+
+    xml_file = "reports/nightly_results.xml"
+    if not os.path.exists(xml_file):
+        return
+
+    # Parse JUnit XML to count failures
+    tree = ET.parse(xml_file)
+    root = tree.getroot()
+    passed  = len(root.findall(".//testcase[not(failure|error)]"))
+    failed  = len(root.findall(".//testcase[failure or error]"))
+    total   = passed + failed
+
+    if failed > 0:
+        subject = f"[Nightly CI] {failed}/{total} tests FAILED — {date.today()}"
+        body    = f"Passed: {passed}\nFailed: {failed}\n\n" \
+                  f"View full report: {os.environ.get('CI_BUILD_URL', 'N/A')}"
+        send_alert(subject, body, os.environ["ALERT_EMAIL"])
+        print(f"[Alert] {failed} test(s) failed. Email alert sent.")</code></pre>
+      </div>
+
     </div>
   </div>
 
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>After the nightly workflow completes and regressions are detected:</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">Nightly CI Run Output</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-green">✓ Checkout repository</span>
+<span class="t-green">✓ Install dependencies</span>
+
+<span class="t-green">✓ Run full regression suite</span>
+<span class="t-blue">test_dhcp[AP-01] PASSED</span>
+<span class="t-blue">test_dhcp[AP-02] PASSED</span>
+<span class="t-blue">test_dns[AP-01] PASSED</span>
+<span class="t-blue">test_rssi[AP-02] FAILED</span>
+
+<span class="t-dim">======================== 3 passed, 1 failed in 28.3s =========================</span>
+
+<span class="t-green">✓ Post-test hooks</span>
+<span class="t-yellow">[Alert] 1 test(s) failed. Email alert sent.</span>
+
+<span class="t-dim">Subject: [Nightly CI] 1/4 tests FAILED — 2026-06-30</span>
+<span class="t-dim">To: team@company.com</span>
+<span class="t-dim">Body:</span>
+<span class="t-dim">  Passed: 3</span>
+<span class="t-dim">  Failed: 1</span>
+<span class="t-dim">  View full report: https://github.com/utkarshk24/.../actions/runs/12345</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Nightly CI Patterns -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">📋</span>
+      <h2>Nightly CI Patterns & Cron Syntax</h2>
+    </div>
+    <div class="section-card-body">
+      <table class="req-table">
+        <thead><tr><th>Cron Pattern</th><th>When it runs</th><th>Use case</th></tr></thead>
+        <tbody>
+          <tr><td><code>0 23 * * *</code></td><td>11 PM UTC every night</td><td>End-of-day regression</td></tr>
+          <tr><td><code>0 2 * * *</code></td><td>2 AM UTC every night</td><td>Off-peak testing (less interference)</td></tr>
+          <tr><td><code>0 0 * * 1</code></td><td>Midnight UTC every Monday</td><td>Weekly deep regression test</td></tr>
+          <tr><td><code>0 */4 * * *</code></td><td>Every 4 hours</td><td>Frequent trend sampling</td></tr>
+          <tr><td><code>0 23 1 * *</code></td><td>11 PM UTC on the 1st of each month</td><td>Monthly baseline reset</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Exercise -->
   <div class="exercise-card">
-    <div class="exercise-header">
-      <span class="exercise-icon">🏋️</span>
-      <h3 class="exercise-title">Day 38 Exercise</h3>
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
     </div>
-    <p>Add a conftest.py hook <code>pytest_sessionfinish</code> that reads the JUnit XML
-    <code>results.xml</code> after the test run, counts failures, and calls
-    <code>send_alert()</code> if the failure count is &gt; 0. Test it by intentionally
-    failing one test.</p>
+    <div class="exercise-card-body">
+      <p>
+        Build a nightly CI pipeline with regression detection and alerting:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Create <code>.github/workflows/nightly.yml</code> that
+          runs on a schedule (cron: <code>'0 23 * * *'</code> for 11 PM UTC). The workflow
+          should checkout code, install dependencies, run <code>pytest tests/ -v</code>,
+          and upload reports as artifacts.</li>
+        <li><strong>Task 2:</strong> Write a <code>conftest.py</code> hook
+          (<code>pytest_sessionfinish</code>) that parses the JUnit XML report after tests
+          complete, counts failures, and calls <code>send_alert()</code> if any test failed.
+          Test it by intentionally failing one test locally.</li>
+        <li><strong>Bonus:</strong> Store RSSI readings from each nightly run in JSON, and
+          implement <code>detect_rssi_regression()</code> to alert if today's RSSI dropped
+          &gt;5 dBm compared to the 7-day rolling average. This catches environmental drift.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> To test the alert locally without GitHub Actions, set
+        environment variables: <code>export TEST_ENV=nightly</code>,
+        <code>export SMTP_FROM=your@gmail.com</code>,
+        <code>export SMTP_PASSWORD=$APP_PASSWORD</code>, then run pytest. Alerts will fire
+        even on your local machine.
+      </div>
+    </div>
   </div>
 
-</div>
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#f85149; margin-bottom:4px;">
+            Up Next · Day 39
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Secrets &amp; Environment Config
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            Your code has hardcoded AP passwords. Today you'll move them to GitHub Secrets,
+            environment variables, and .env files. Your codebase becomes safe to share.
+            Credentials never touch git.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

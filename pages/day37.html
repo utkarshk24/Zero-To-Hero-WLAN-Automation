@@ -1,36 +1,82 @@
+<!-- ============================================================
+     Day 37: Introduction to GitHub Actions CI/CD
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
 <div class="day-content">
 
+  <!-- Hero -->
   <div class="day-hero">
     <div class="day-hero-meta">
-      <span class="day-tag">Day 37</span>
-      <span class="phase-tag phase-5">Phase 5 — Advanced Scenarios &amp; CI/CD</span>
+      <span class="day-number-badge">Day 37</span>
+      <span class="phase-badge" style="background:rgba(248,81,73,0.15); color:#f85149; border:1px solid rgba(248,81,73,0.3);">
+        Phase 5 · Advanced Scenarios &amp; CI/CD
+      </span>
     </div>
-    <h1 class="day-hero-title">Introduction to GitHub Actions CI/CD</h1>
-    <p class="day-hero-sub">
+    <h1>Introduction to GitHub Actions<br>CI/CD</h1>
+    <p>
       Your test suite runs manually today. Tomorrow it runs automatically on every commit.
-      Today you'll write GitHub Actions workflow files that install your dependencies, run
-      PyTest, and publish reports — so every push to your repo is automatically tested.
+      Today you'll write GitHub Actions workflow files that install dependencies, run pytest,
+      and publish reports — so every push to your repo is automatically tested.
     </p>
-    <div class="day-hero-tags">
-      <span class="tag">GitHub Actions</span>
-      <span class="tag">Workflow YAML</span>
-      <span class="tag">Jobs &amp; Steps</span>
-      <span class="tag">Artifacts</span>
-      <span class="tag">Triggers</span>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~50 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.10+</span></div>
+      <div class="hero-stat"><span>📦</span><span>YAML · pytest · artifacts</span></div>
+      <div class="hero-stat"><span>⚙️</span><span>Triggers · Secrets · Matrix</span></div>
     </div>
   </div>
 
+  <!-- The Why -->
   <div class="section-card">
-    <h2 class="section-title">1 — Your First Workflow File</h2>
-    <div class="code-block-wrapper">
-      <div class="code-block-header">
-        <span class="code-lang">bash</span>
-        <button class="copy-btn">Copy</button>
-      </div>
-      <pre><code class="language-bash">
-# .github/workflows/test.yml
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
 
-name: WLAN Automation Tests
+      <h3>Manual Testing vs. Automated CI</h3>
+      <p>
+        Manual testing: you clone the repo, install dependencies, run pytest locally,
+        then git push. A teammate clones the same repo, runs the same tests, and gets
+        a different result. Did the code break, or did they miss a dependency?
+      </p>
+      <p>
+        Automated CI: the repository itself runs the tests on every push. If a test fails,
+        the build is red. You can't merge until tests pass. Everyone sees the same results
+        in the same environment.
+      </p>
+
+      <div class="callout">
+        <strong>GitHub Actions is free for public repositories.</strong><br>
+        Every push triggers a workflow. GitHub provides runners (Ubuntu, macOS, Windows),
+        so your tests execute in a clean environment every time. You don't need to maintain
+        your own CI server — GitHub does it for you.
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — Building Your First Workflow</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        GitHub Actions workflows live in <code>.github/workflows/</code> and are written in YAML.
+        A workflow defines jobs, steps, triggers, and artifacts. When you push code,
+        GitHub reads the workflow and executes it.
+      </p>
+
+      <div class="step-label">Block 1 — Your First Workflow: run pytest on push</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">yaml</span>
+          <span class="code-block-filename">.github/workflows/test.yml</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-yaml">name: WLAN Automation Tests
 
 on:
   push:
@@ -64,20 +110,21 @@ jobs:
         if: always()   # upload even if tests fail
         with:
           name: test-report-${{ github.run_number }}
-          path: reports/report.html
-      </code></pre>
-    </div>
-  </div>
-
-  <div class="section-card">
-    <h2 class="section-title">2 — Workflow with Matrix (Multiple Python Versions)</h2>
-    <div class="code-block-wrapper">
-      <div class="code-block-header">
-        <span class="code-lang">bash</span>
-        <button class="copy-btn">Copy</button>
+          path: reports/report.html</code></pre>
       </div>
-      <pre><code class="language-bash">
-jobs:
+
+      <div class="step-label">Block 2 — Matrix Strategy (test multiple Python versions)</div>
+      <p>
+        Test your code on Python 3.10, 3.11, and 3.12 in parallel. If any version fails,
+        the entire job fails. This catches version-specific bugs early.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">yaml</span>
+          <span class="code-block-filename">.github/workflows/test.yml</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-yaml">jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -95,20 +142,21 @@ jobs:
       - name: Install and test
         run: |
           pip install -r requirements.txt
-          pytest -m "not live" -v
-      </code></pre>
-    </div>
-  </div>
-
-  <div class="section-card">
-    <h2 class="section-title">3 — Publishing Allure Reports to GitHub Pages</h2>
-    <div class="code-block-wrapper">
-      <div class="code-block-header">
-        <span class="code-lang">bash</span>
-        <button class="copy-btn">Copy</button>
+          pytest -m "not live" -v</code></pre>
       </div>
-      <pre><code class="language-bash">
-      - name: Run tests with Allure
+
+      <div class="step-label">Block 3 — Publishing Allure Reports to GitHub Pages</div>
+      <p>
+        After every test run, generate an Allure report and deploy it to GitHub Pages.
+        Stakeholders can view the latest results without leaving GitHub.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">yaml</span>
+          <span class="code-block-filename">.github/workflows/test.yml</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-yaml">      - name: Run tests with Allure
         run: pytest -m "not live" --alluredir=allure-results
 
       - name: Generate Allure report
@@ -124,20 +172,21 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          publish_dir: allure-history
-      </code></pre>
-    </div>
-  </div>
-
-  <div class="section-card">
-    <h2 class="section-title">4 — Useful GitHub Actions Patterns</h2>
-    <div class="code-block-wrapper">
-      <div class="code-block-header">
-        <span class="code-lang">bash</span>
-        <button class="copy-btn">Copy</button>
+          publish_dir: allure-history</code></pre>
       </div>
-      <pre><code class="language-bash">
-# Run only on specific file changes (skip CI for docs changes)
+
+      <div class="step-label">Block 4 — Useful Workflow Patterns</div>
+      <p>
+        Skip CI for certain file changes, pass secrets securely, and cache dependencies
+        to speed up your workflows.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">yaml</span>
+          <span class="code-block-filename">.github/workflows/test.yml</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-yaml"># Run only on specific file changes (skip CI for docs changes)
 on:
   push:
     paths:
@@ -146,6 +195,7 @@ on:
       - 'requirements.txt'
 
 # Pass secrets as environment variables (never hardcode credentials)
+    steps:
       - name: Run with credentials
         env:
           WIFI_PASSWORD: ${{ secrets.CORP_WIFI_PASSWORD }}
@@ -157,20 +207,129 @@ on:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-      </code></pre>
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}</code></pre>
+      </div>
+
     </div>
   </div>
 
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>After pushing your workflow file, GitHub Actions runs automatically. View the results in the <strong>Actions</strong> tab:</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">GitHub Actions Workflow Run (Real-time output)</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-green">✓ Checkout repository</span>
+<span class="t-dim">  Syncing repository to workspace</span>
+
+<span class="t-green">✓ Set up Python 3.12</span>
+<span class="t-dim">  Found in cache @ /opt/hostedtoolcache/Python/3.12.0/x64</span>
+
+<span class="t-green">✓ Install dependencies</span>
+<span class="t-dim">  Collecting pytest==7.4.3</span>
+<span class="t-dim">  Successfully installed 8 packages</span>
+
+<span class="t-green">✓ Run tests</span>
+<span class="t-blue">test_wlan_connection.py::test_dhcp PASSED</span>
+<span class="t-blue">test_wlan_connection.py::test_dns PASSED</span>
+<span class="t-blue">test_roaming.py::test_roaming_latency PASSED</span>
+
+<span class="t-green">======================== 3 passed in 12.45s =========================</span>
+
+<span class="t-green">✓ Upload HTML report</span>
+<span class="t-dim">  Uploaded artifact 'test-report-42' (1.2 MB)</span>
+
+<span class="t-green">Build succeeded ✓</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GitHub Actions Concepts -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">📋</span>
+      <h2>GitHub Actions Concepts at a Glance</h2>
+    </div>
+    <div class="section-card-body">
+      <table class="req-table">
+        <thead><tr><th>Concept</th><th>Meaning</th><th>Example</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Workflow</strong></td><td>Automated process defined in YAML</td><td>.github/workflows/test.yml</td></tr>
+          <tr><td><strong>Trigger</strong></td><td>Event that starts the workflow</td><td>push, pull_request, schedule</td></tr>
+          <tr><td><strong>Job</strong></td><td>Set of steps that run on a runner</td><td>test, build, deploy</td></tr>
+          <tr><td><strong>Step</strong></td><td>Individual task (action or shell command)</td><td>checkout, setup-python, pytest</td></tr>
+          <tr><td><strong>Runner</strong></td><td>Virtual machine where jobs execute</td><td>ubuntu-latest, windows-latest</td></tr>
+          <tr><td><strong>Artifact</strong></td><td>Output files saved from a job</td><td>HTML reports, logs, coverage</td></tr>
+          <tr><td><strong>Secret</strong></td><td>Encrypted environment variable</td><td>API keys, passwords (never in code)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Exercise -->
   <div class="exercise-card">
-    <div class="exercise-header">
-      <span class="exercise-icon">🏋️</span>
-      <h3 class="exercise-title">Day 37 Exercise</h3>
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
     </div>
-    <p>Create a <code>.github/workflows/test.yml</code> for your WLAN suite that runs
-    <code>pytest -m "not live"</code> on every push, uploads the HTML report as an artifact,
-    and posts a Slack notification with the pass/fail count using a webhook secret.
-    Hint: use <code>slackapi/slack-github-action</code>.</p>
+    <div class="exercise-card-body">
+      <p>
+        Create a GitHub Actions workflow that automates your WLAN test suite:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Create <code>.github/workflows/test.yml</code> that
+          runs on every push to <code>main</code> and every pull request. The workflow
+          should checkout code, set up Python 3.12, install dependencies from
+          <code>requirements.txt</code>, and run <code>pytest -m "not live" -v</code>.</li>
+        <li><strong>Task 2:</strong> Configure the workflow to upload the pytest HTML
+          report as an artifact using <code>actions/upload-artifact@v4</code>. Name the
+          artifact <code>test-report-${{ github.run_number }}</code> so each run has a
+          unique report.</li>
+        <li><strong>Bonus:</strong> Add a matrix strategy that tests your code on Python
+          3.10, 3.11, and 3.12 in parallel. If any version fails, the entire job fails.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> After creating <code>.github/workflows/test.yml</code>,
+        git add and git push. GitHub automatically detects the workflow file and runs it.
+        Watch the <strong>Actions</strong> tab in your GitHub repo for live output.
+        Each job run is logged and can be debugged if it fails.
+      </div>
+    </div>
   </div>
 
-</div>
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#f85149; margin-bottom:4px;">
+            Up Next · Day 38
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            WLAN Tests in Nightly CI Pipelines
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            Your GitHub Actions workflow runs on push. Tomorrow you'll schedule it to
+            run nightly, catching hardware drift and configuration changes before
+            production sees them. Email alerts on failure.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

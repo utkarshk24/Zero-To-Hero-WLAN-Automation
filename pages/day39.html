@@ -1,35 +1,83 @@
+<!-- ============================================================
+     Day 39: Secrets & Environment Configuration
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
 <div class="day-content">
 
+  <!-- Hero -->
   <div class="day-hero">
     <div class="day-hero-meta">
-      <span class="day-tag">Day 39</span>
-      <span class="phase-tag phase-5">Phase 5 — Advanced Scenarios &amp; CI/CD</span>
+      <span class="day-number-badge">Day 39</span>
+      <span class="phase-badge" style="background:rgba(248,81,73,0.15); color:#f85149; border:1px solid rgba(248,81,73,0.3);">
+        Phase 5 · Advanced Scenarios &amp; CI/CD
+      </span>
     </div>
-    <h1 class="day-hero-title">Secrets &amp; Environment Configuration</h1>
-    <p class="day-hero-sub">
+    <h1>Secrets &amp; Environment<br>Configuration</h1>
+    <p>
       Wi-Fi passwords, AP credentials, and SMTP keys don't belong in code. Today you'll
       master the right way to manage secrets in Python automation — <code>python-dotenv</code>
       locally, GitHub Secrets in CI, and runtime validation so tests fail fast with a clear
       message if config is missing.
     </p>
-    <div class="day-hero-tags">
-      <span class="tag">python-dotenv</span>
-      <span class="tag">.env files</span>
-      <span class="tag">GitHub Secrets</span>
-      <span class="tag">os.environ</span>
-      <span class="tag">Config Validation</span>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~45 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>🔐</span><span>dotenv · GitHub Secrets</span></div>
+      <div class="hero-stat"><span>✅</span><span>Config validation</span></div>
     </div>
   </div>
 
+  <!-- The Why -->
   <div class="section-card">
-    <h2 class="section-title">1 — Using python-dotenv for Local Development</h2>
-    <div class="code-block-wrapper">
-      <div class="code-block-header">
-        <span class="code-lang">python</span>
-        <button class="copy-btn">Copy</button>
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>Hardcoded Secrets = Disaster Waiting to Happen</h3>
+      <p>
+        You hardcode <code>WIFI_PASSWORD = "CorpWifi2024"</code> in your test file. You commit
+        it to GitHub. Someone forks your repo. The password is public forever. HR gets a call
+        from the security team.
+      </p>
+      <p>
+        Secrets must live outside your code. Locally, they go in <code>.env</code> files that
+        git ignores. In CI, they go in GitHub Secrets, which GitHub redacts from logs.
+        Your code reads from environment variables — never from files or hardcoded strings.
+      </p>
+
+      <div class="callout">
+        <strong>Fail fast on missing config.</strong><br>
+        Don't let tests run if required secrets are missing. Validate at startup and raise
+        a clear error. "Missing WIFI_PASSWORD" is better than a cryptic "Connection refused"
+        from a test 20 minutes into the run.
       </div>
-      <pre><code class="language-python">
-# pip install python-dotenv
+
+    </div>
+  </div>
+
+  <!-- Code Walkthrough -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">💻</span>
+      <h2>Code Walkthrough — Secrets Management</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Secrets flow through three layers: local .env files, GitHub Secrets vault, and
+        runtime environment variables. At each layer, validate and fail fast if something
+        is missing.
+      </p>
+
+      <div class="step-label">Block 1 — Load Secrets with python-dotenv (Local)</div>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">python</span>
+          <span class="code-block-filename">config.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># pip install python-dotenv
 
 # .env file (NEVER commit this to git!)
 # WIFI_SSID=CorpWiFi
@@ -50,20 +98,21 @@ min_rssi = int(os.environ.get("MIN_RSSI", "-70"))   # with default
 
 print(f"SSID: {ssid}")
 print(f"Min RSSI: {min_rssi} dBm")
-print(f"Environment: {os.environ.get('TEST_ENV', 'unknown')}")
-      </code></pre>
-    </div>
-  </div>
-
-  <div class="section-card">
-    <h2 class="section-title">2 — .gitignore: Never Commit Secrets</h2>
-    <div class="code-block-wrapper">
-      <div class="code-block-header">
-        <span class="code-lang">bash</span>
-        <button class="copy-btn">Copy</button>
+print(f"Environment: {os.environ.get('TEST_ENV', 'unknown')}")</code></pre>
       </div>
-      <pre><code class="language-bash">
-# .gitignore — add these BEFORE your first commit
+
+      <div class="step-label">Block 2 — .gitignore: Never Commit Secrets</div>
+      <p>
+        Add secret file patterns to <code>.gitignore</code> BEFORE your first commit.
+        Git won't track them, so you can't accidentally commit them.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">bash</span>
+          <span class="code-block-filename">.gitignore</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-bash"># .gitignore — add these BEFORE your first commit
 .env
 .env.*
 *.env
@@ -77,20 +126,22 @@ git status --short | grep "\.env"
 # If .env was already committed — remove it:
 git rm --cached .env
 echo ".env" >> .gitignore
-git commit -m "Remove .env from tracking"
-      </code></pre>
-    </div>
-  </div>
-
-  <div class="section-card">
-    <h2 class="section-title">3 — GitHub Secrets for CI</h2>
-    <div class="code-block-wrapper">
-      <div class="code-block-header">
-        <span class="code-lang">bash</span>
-        <button class="copy-btn">Copy</button>
+git commit -m "Remove .env from tracking"</code></pre>
       </div>
-      <pre><code class="language-bash">
-# In GitHub repo: Settings → Secrets and variables → Actions
+
+      <div class="step-label">Block 3 — GitHub Secrets for CI</div>
+      <p>
+        In GitHub's web UI, go to Settings → Secrets and variables → Actions. Add secrets
+        there. Reference them in your workflow with <code>${{ secrets.NAME }}</code> and
+        pass them as environment variables.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">yaml</span>
+          <span class="code-block-filename">.github/workflows/test.yml</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-yaml"># In GitHub repo: Settings → Secrets and variables → Actions
 # Add secrets: WIFI_SSID, WIFI_PASSWORD, MIN_RSSI
 
 # Use them in workflow:
@@ -105,20 +156,21 @@ jobs:
           WIFI_SSID:     ${{ secrets.WIFI_SSID }}
           WIFI_PASSWORD: ${{ secrets.WIFI_PASSWORD }}
           MIN_RSSI:      ${{ secrets.MIN_RSSI }}
-        run: pytest tests/ -m "not live" -v
-      </code></pre>
-    </div>
-  </div>
-
-  <div class="section-card">
-    <h2 class="section-title">4 — Config Validation at Test Startup</h2>
-    <div class="code-block-wrapper">
-      <div class="code-block-header">
-        <span class="code-lang">python</span>
-        <button class="copy-btn">Copy</button>
+        run: pytest tests/ -m "not live" -v</code></pre>
       </div>
-      <pre><code class="language-python">
-# config.py — centralised config loader with validation
+
+      <div class="step-label">Block 4 — Config Validation at Startup</div>
+      <p>
+        Create a centralized config loader that validates all required variables exist.
+        If any are missing, pytest fails immediately with a clear error message.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">python</span>
+          <span class="code-block-filename">config.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python"># config.py — centralised config loader with validation
 
 import os
 from dotenv import load_dotenv
@@ -150,20 +202,22 @@ def load_config():
 # conftest.py
 # @pytest.fixture(scope="session")
 # def config():
-#     return load_config()   # fails immediately if vars are missing
-      </code></pre>
-    </div>
-  </div>
-
-  <div class="section-card">
-    <h2 class="section-title">5 — .env.example: Document Your Config</h2>
-    <div class="code-block-wrapper">
-      <div class="code-block-header">
-        <span class="code-lang">bash</span>
-        <button class="copy-btn">Copy</button>
+#     return load_config()   # fails immediately if vars are missing</code></pre>
       </div>
-      <pre><code class="language-bash">
-# .env.example — commit this! It documents config without exposing values.
+
+      <div class="step-label">Block 5 — .env.example: Document Config</div>
+      <p>
+        Commit <code>.env.example</code> to git. It documents which variables are required
+        and what formats they expect — without exposing actual values. New developers copy it
+        to <code>.env</code> and fill in their values.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">bash</span>
+          <span class="code-block-filename">.env.example</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-bash"># .env.example — commit this! Documents config without exposing values.
 
 WIFI_SSID=your_ssid_here
 WIFI_PASSWORD=your_password_here
@@ -176,20 +230,142 @@ IPERF_SERVER=192.168.1.100
 SMTP_FROM=alerts@yourcompany.com
 SMTP_PASSWORD=app_password_here
 SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
-      </code></pre>
+SMTP_PORT=587</code></pre>
+      </div>
+
     </div>
   </div>
 
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>When config is loaded and validated:</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">Config Validation Output</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-green">✓ Loading .env from local .env file</span>
+<span class="t-green">✓ Config loaded successfully</span>
+
+<span class="t-dim">Required variables:</span>
+<span class="t-blue">  WIFI_SSID: CorpWiFi</span>
+<span class="t-blue">  WIFI_PASSWORD: ••••••••••</span>
+
+<span class="t-dim">Optional variables:</span>
+<span class="t-blue">  MIN_RSSI: -70</span>
+<span class="t-blue">  TEST_ENV: local</span>
+<span class="t-blue">  AP_INTERFACE: wlan0</span>
+
+<span class="t-green">Running pytest with config validated...</span>
+<span class="t-blue">test_dhcp PASSED</span>
+<span class="t-blue">test_dns PASSED</span>
+<span class="t-green">======================== 2 passed =========================</span></pre>
+        </div>
+      </div>
+
+      <p style="margin-top: 20px;">When config is missing (error case):</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">Missing Config Error</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-red">✗ Config validation failed</span>
+
+<span class="t-red">EnvironmentError: Missing required environment variables:</span>
+<span class="t-red">  ['WIFI_SSID', 'WIFI_PASSWORD']</span>
+
+<span class="t-yellow">Copy .env.example to .env and fill in the values.</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Secret Management Patterns -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">📋</span>
+      <h2>Secret Management Patterns</h2>
+    </div>
+    <div class="section-card-body">
+      <table class="req-table">
+        <thead><tr><th>Layer</th><th>Storage</th><th>Visibility</th><th>Use case</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Local Dev</strong></td><td>.env file (git-ignored)</td><td>Only your machine</td><td>Development, testing</td></tr>
+          <tr><td><strong>CI</strong></td><td>GitHub Secrets vault</td><td>Encrypted, masked in logs</td><td>GitHub Actions workflows</td></tr>
+          <tr><td><strong>Production</strong></td><td>Vault service (HashiCorp, AWS Secrets Manager)</td><td>Access-controlled, audited</td><td>Enterprise deployment</td></tr>
+          <tr><td><strong>Documentation</strong></td><td>.env.example (committed)</td><td>Public, on GitHub</td><td>Guides for new developers</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Exercise -->
   <div class="exercise-card">
-    <div class="exercise-header">
-      <span class="exercise-icon">🏋️</span>
-      <h3 class="exercise-title">Day 39 Exercise</h3>
+    <div class="exercise-card-header">
+      <span style="font-size:18px">🏋️</span>
+      <h2>Hands-on Exercise — Your Turn</h2>
     </div>
-    <p>Refactor your entire test suite to load all configuration from environment variables
-    using the <code>load_config()</code> pattern above. Remove every hardcoded credential,
-    IP address, and threshold from your test files. Add a startup check that prints
-    "Config OK" or raises with a list of missing vars.</p>
+    <div class="exercise-card-body">
+      <p>
+        Refactor your test suite to use secure secrets management:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Create a <code>config.py</code> with a <code>load_config()</code>
+          function that loads from <code>.env</code> using <code>python-dotenv</code>. Define
+          <code>REQUIRED_VARS</code> (e.g., WIFI_SSID, WIFI_PASSWORD) and <code>OPTIONAL_VARS</code>
+          (e.g., MIN_RSSI with a default of "-70"). Raise <code>EnvironmentError</code> if any
+          required variable is missing.</li>
+        <li><strong>Task 2:</strong> Create <code>.env.example</code> documenting all variables
+          and their expected formats. Add <code>.env</code> to <code>.gitignore</code> to prevent
+          accidental commits. Commit <code>.env.example</code> (no secrets inside).</li>
+        <li><strong>Bonus:</strong> Create a conftest.py fixture that calls <code>load_config()</code>
+          at session startup. If it fails, pytest exits with a clear message. All tests receive
+          the config as a pytest fixture argument.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> Use <code>@pytest.fixture(scope="session")</code> in conftest.py
+        to load config once at the start of the entire test run. This ensures all tests see the
+        same validated config. If <code>load_config()</code> raises an exception, pytest stops
+        before running any tests.
+      </div>
+    </div>
   </div>
 
-</div>
+  <!-- What's Next -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:24px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="font-size:36px;">➡️</div>
+        <div>
+          <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#f85149; margin-bottom:4px;">
+            Up Next · Day 40
+          </div>
+          <div style="font-size:17px; font-weight:700; color:#e6edf3; margin-bottom:6px;">
+            Final Capstone: Enterprise Framework
+          </div>
+          <div style="font-size:13.5px; color:#8b949e;">
+            You've learned every piece. Tomorrow you assemble them into a production-grade
+            WLAN automation framework: fixtures, parametrization, Allure reports, nightly
+            CI, secrets management, and everything in one bulletproof pipeline.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->

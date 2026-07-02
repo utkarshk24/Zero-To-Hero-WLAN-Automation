@@ -1,71 +1,130 @@
+<!-- ============================================================
+     Day 40: Final Capstone — Enterprise WLAN Automation Framework
+     Fragment loaded into index.html by app.js
+     ============================================================ -->
 <div class="day-content">
 
+  <!-- Hero -->
   <div class="day-hero">
     <div class="day-hero-meta">
-      <span class="day-tag">Day 40</span>
-      <span class="phase-tag phase-5">Final Capstone — Advanced Scenarios &amp; CI/CD</span>
+      <span class="day-number-badge">Day 40</span>
+      <span class="phase-badge" style="background:rgba(248,81,73,0.15); color:#f85149; border:1px solid rgba(248,81,73,0.3);">
+        Phase 5 · Final Capstone
+      </span>
     </div>
-    <h1 class="day-hero-title">Final Capstone: Enterprise WLAN Automation Framework</h1>
-    <p class="day-hero-sub">
-      40 days of learning converges here. You'll build a complete, production-ready enterprise
-      WLAN automation framework — configurable, portable, CI-integrated, and documented.
-      This is the project you put in your portfolio.
+    <h1>Final Capstone:<br>Enterprise WLAN Automation Framework</h1>
+    <p>
+      40 days of learning converges here. You'll assemble a complete, production-ready
+      enterprise WLAN automation framework — configurable, portable, CI-integrated, and
+      documented. This is the project you put in your portfolio and use in your career.
     </p>
-    <div class="day-hero-tags">
-      <span class="tag">Final Capstone</span>
-      <span class="tag">Full Framework</span>
-      <span class="tag">Portfolio Ready</span>
-      <span class="tag">CI/CD</span>
-      <span class="tag">Production Grade</span>
+    <div class="day-hero-footer">
+      <div class="hero-stat"><span>⏱</span><span>~90 min</span></div>
+      <div class="hero-stat"><span>🐍</span><span>Python 3.9+</span></div>
+      <div class="hero-stat"><span>📦</span><span>Full framework assembly</span></div>
+      <div class="hero-stat"><span>🎓</span><span>Portfolio-ready</span></div>
     </div>
   </div>
 
+  <!-- The Why -->
   <div class="section-card">
-    <h2 class="section-title">Framework Architecture</h2>
-    <div class="code-block-wrapper">
-      <div class="code-block-header">
-        <span class="code-lang">bash</span>
-        <button class="copy-btn">Copy</button>
+    <div class="section-card-header">
+      <span class="section-icon">🤔</span>
+      <h2>The 'Why' — Conceptual Breakdown</h2>
+    </div>
+    <div class="section-card-body">
+
+      <h3>From Scattered Scripts to Enterprise Framework</h3>
+      <p>
+        For 39 days, you learned individual skills: scanning, connecting, measuring DHCP,
+        capturing packets, parametrizing tests, running CI pipelines. These are all correct
+        and valuable. But they live in separate files. A company hiring needs to see them
+        integrated into a cohesive, runnable, deployable system.
+      </p>
+      <p>
+        Day 40 is assembly. You take all 39 days of learning and wire them into one
+        framework: a single source of truth for config, a unified test suite, a complete
+        CI/CD pipeline, and professional documentation. The result is something you can
+        hand to a team and they immediately understand what it does and how to use it.
+      </p>
+
+      <div class="callout">
+        <strong>Enterprise frameworks have structure.</strong><br>
+        Separate concerns (config, scanning, validation, reporting). Reusable fixtures.
+        Configurable via environment variables. Automated testing on every commit. Clear
+        documentation. When you follow these patterns, even complex automation becomes
+        maintainable and scalable.
       </div>
-      <pre><code class="language-bash">
-enterprise-wlan-framework/
-├── .env.example                 # config template
+
+    </div>
+  </div>
+
+  <!-- Framework Architecture -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🏗️</span>
+      <h2>Framework Architecture</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        Here's the complete directory structure for a production WLAN automation framework.
+        This is your blueprint — separate concerns, reusable modules, tests alongside source.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">bash</span>
+          <span class="code-block-filename">Directory Structure</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-bash">enterprise-wlan-framework/
+├── .env.example                 # config template (commit this)
+├── .gitignore                   # ignore .env + secrets (commit this)
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml               # on-push unit tests
 │       └── nightly.yml          # nightly regression + reports
 ├── pytest.ini                   # unified test settings
 ├── requirements.txt             # pinned dependencies
-├── README.md
+├── README.md                    # project documentation
 ├── src/
 │   ├── config.py                # env-based config loader
 │   ├── wlan_utils.py            # signal, channel, BSSID helpers
 │   ├── scanner.py               # cross-platform SSID scanner
 │   ├── connector.py             # WPA2/WPA3 connect/disconnect
-│   ├── validator.py             # DHCP, DNS, ping validation
-│   ├── monitor.py               # RSSI monitoring + alerts
-│   └── reporter.py              # CSV + JSON + trend tracking
+│   ├── validator.py             # orchestrates all validation stages
+│   ├── monitor.py               # RSSI monitoring + trend tracking
+│   └── reporter.py              # CSV + JSON + Allure output
 ├── tests/
-│   ├── conftest.py              # session fixtures + metadata
+│   ├── conftest.py              # session fixtures + config loading
 │   ├── test_signal.py           # RSSI and quality tests
 │   ├── test_security.py         # rogue AP and compliance tests
 │   ├── test_channels.py         # channel plan tests
 │   ├── test_connectivity.py     # DHCP/DNS/throughput tests
 │   └── test_roaming.py          # 802.11r/k/v latency tests
-└── reports/                     # HTML, Allure, CSV outputs
-      </code></pre>
+└── reports/                     # HTML, Allure, CSV outputs (git-ignored)</code></pre>
+      </div>
     </div>
   </div>
 
+  <!-- Core Validator Module -->
   <div class="section-card">
-    <h2 class="section-title">The Core Framework Module (src/validator.py)</h2>
-    <div class="code-block-wrapper">
-      <div class="code-block-header">
-        <span class="code-lang">python</span>
-        <button class="copy-btn">Copy</button>
-      </div>
-      <pre><code class="language-python">
-"""validator.py — The heart of the framework."""
+    <div class="section-card-header">
+      <span class="section-icon">⚙️</span>
+      <h2>The Core Validator Module (src/validator.py)</h2>
+    </div>
+    <div class="section-card-body">
+      <p>
+        The heart of the framework. Orchestrates all validation stages: scan, connect, DHCP,
+        DNS, ping. Each stage is independent and can fail gracefully. Results are collected
+        and reported.
+      </p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-block-lang">python</span>
+          <span class="code-block-filename">src/validator.py</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-python">"""validator.py — The heart of the framework."""
 
 import json, datetime, sys
 from config import load_config
@@ -147,37 +206,154 @@ class WLANValidator:
 
 
 if __name__ == "__main__":
-    sys.exit(WLANValidator().run())
-      </code></pre>
+    sys.exit(WLANValidator().run())</code></pre>
+      </div>
     </div>
   </div>
 
-  <div class="section-card" style="border: 2px solid; border-image: linear-gradient(135deg,#58a6ff,#3fb950,#d29922,#a371f7,#f85149) 1; padding: 24px; border-radius: 8px;">
-    <h2 class="section-title" style="background: linear-gradient(135deg,#58a6ff,#a371f7); -webkit-background-clip:text; -webkit-text-fill-color:transparent; font-size:1.4rem;">🎓 Course Complete — Zero to Hero!</h2>
-    <p style="color:#c9d1d9; margin-top:12px; line-height:1.9;">You've completed all 40 days. Here's what you've built:</p>
-    <ul style="color:#c9d1d9; margin: 12px 0 0 20px; line-height: 2.2;">
-      <li><strong style="color:#58a6ff;">Phase 1</strong> — Python foundations + config parsing + logging</li>
-      <li><strong style="color:#3fb950;">Phase 2</strong> — OS control, Scapy, monitor mode, channel hopping</li>
-      <li><strong style="color:#d29922;">Phase 3</strong> — Connections, DHCP, DNS, RSSI monitoring, timing</li>
-      <li><strong style="color:#a371f7;">Phase 4</strong> — PyTest, fixtures, parametrize, HTML + Allure reports</li>
-      <li><strong style="color:#f85149;">Phase 5</strong> — OTA capture, throughput, roaming, CI/CD, secrets</li>
-    </ul>
-    <p style="color:#8b949e; margin-top:16px; font-style:italic;">
-      You started as a manual WLAN tester. You're leaving as a WLAN automation engineer.
-      The tools you've built are real, portable, and production-ready.
-      Keep building, keep testing, keep automating.
-    </p>
+  <!-- Expected Output -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <span class="section-icon">🖥</span>
+      <h2>Expected Output</h2>
+    </div>
+    <div class="section-card-body">
+      <p>Running the complete framework end-to-end:</p>
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot-red"></span>
+            <span class="dot-yellow"></span>
+            <span class="dot-green"></span>
+          </div>
+          <div class="terminal-title">Complete Framework Execution</div>
+        </div>
+        <div class="terminal-body">
+          <pre><span class="t-green">============================================================</span>
+<span class="t-green"> WLAN Validation Framework</span>
+<span class="t-green"> Target: CorpWiFi  |  2026-07-02 14:30</span>
+<span class="t-green">============================================================</span>
+
+<span class="t-blue">  [✓] Scan              RSSI=-55 dBm, found=1 instance(s)</span>
+<span class="t-blue">  [✓] Connect           2.34s</span>
+<span class="t-blue">  [✓] DHCP              IP assigned</span>
+<span class="t-blue">  [✓] DNS               DNS resolves</span>
+<span class="t-blue">  [✓] Connectivity      Gateway 192.168.1.1</span>
+
+<span class="t-green">PASS: 5/5 stages</span>
+
+<span class="t-dim">  Report: reports/validation_20260702_143015.json</span>
+
+<span class="t-green">======================== pytest result ========================</span>
+<span class="t-blue">test_connectivity.py::test_dhcp PASSED</span>
+<span class="t-blue">test_connectivity.py::test_dns PASSED</span>
+<span class="t-blue">test_signal.py::test_rssi PASSED</span>
+<span class="t-blue">test_roaming.py::test_latency PASSED</span>
+
+<span class="t-green">======================== 4 passed in 45.2s =========================</span>
+
+<span class="t-green">✓ Upload HTML report</span>
+<span class="t-green">✓ Upload Allure report</span>
+<span class="t-green">✓ Build succeeded</span></pre>
+        </div>
+      </div>
+    </div>
   </div>
 
+  <!-- Course Completion Summary -->
+  <div class="section-card" style="background: linear-gradient(135deg,#161b22,#1f2d3d); border-color:#30363d;">
+    <div class="section-card-body" style="padding:32px;">
+      <div style="text-align:center; margin-bottom:24px;">
+        <div style="font-size:64px; margin-bottom:16px;">🎓</div>
+        <div style="font-size:28px; font-weight:700; color:#e6edf3; margin-bottom:8px;">Course Complete</div>
+        <div style="font-size:14px; color:#8b949e;">Zero to Hero WLAN Automation — 40 Days</div>
+      </div>
+
+      <div style="color:#c9d1d9; line-height:2.0; margin:24px 0;">
+        <div style="font-weight:600; color:#e6edf3; margin-bottom:16px;">You've mastered 5 phases:</div>
+        <ul style="list-style:none; padding:0;">
+          <li style="margin-bottom:12px;">
+            <span style="color:#58a6ff; font-weight:600;">Phase 1: Automation Fundamentals</span><br/>
+            <span style="color:#8b949e; font-size:13px;">Python, variables, control flow, functions, imports, libraries</span>
+          </li>
+          <li style="margin-bottom:12px;">
+            <span style="color:#3fb950; font-weight:600;">Phase 2: OS & Network Interfaces</span><br/>
+            <span style="color:#8b949e; font-size:13px;">subprocess, Scapy, monitor mode, frame sniffing, channel hopping</span>
+          </li>
+          <li style="margin-bottom:12px;">
+            <span style="color:#d29922; font-weight:600;">Phase 3: Core WLAN Automation</span><br/>
+            <span style="color:#8b949e; font-size:13px;">Scanning, beacon parsing, connection automation, DHCP/DNS, RSSI</span>
+          </li>
+          <li style="margin-bottom:12px;">
+            <span style="color:#a371f7; font-weight:600;">Phase 4: Industrial Test Frameworks</span><br/>
+            <span style="color:#8b949e; font-size:13px;">PyTest, fixtures, parametrization, HTML reports, Allure</span>
+          </li>
+          <li>
+            <span style="color:#f85149; font-weight:600;">Phase 5: Advanced Scenarios & CI/CD</span><br/>
+            <span style="color:#8b949e; font-size:13px;">Packet capture, throughput, roaming, GitHub Actions, secrets</span>
+          </li>
+        </ul>
+      </div>
+
+      <div style="border-top:1px solid #30363d; padding-top:24px; margin-top:24px;">
+        <div style="color:#8b949e; font-style:italic; line-height:1.8;">
+          You started as a manual WLAN tester. You're leaving as a WLAN automation engineer.
+          The framework you've built is real, portable, and production-ready.
+          Keep building. Keep testing. Keep automating.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Final Challenge -->
   <div class="exercise-card">
-    <div class="exercise-header">
-      <span class="exercise-icon">🏆</span>
-      <h3 class="exercise-title">Final Challenge: Open Source It</h3>
+    <div class="exercise-card-header">
+      <span style="font-size:20px">🏆</span>
+      <h2>Final Challenge: Open Source It</h2>
     </div>
-    <p>Package your framework as a proper Python project: add <code>setup.py</code> or
-    <code>pyproject.toml</code>, a <code>README.md</code> with installation instructions and
-    a demo GIF, and publish it to GitHub with the <code>.github/workflows/ci.yml</code>
-    badge in the README. Share the link — you've earned it.</p>
+    <div class="exercise-card-body">
+      <p>
+        Package your framework as a professional Python project for the world to use:
+      </p>
+      <ul>
+        <li><strong>Task 1:</strong> Create <code>setup.py</code> or <code>pyproject.toml</code>
+          with metadata: author, description, version, dependencies from <code>requirements.txt</code>.
+          This makes your code installable via <code>pip install</code>.</li>
+        <li><strong>Task 2:</strong> Write a comprehensive <code>README.md</code> with:
+          <strong>Badges</strong> (CI status from GitHub Actions),
+          <strong>Quick Start</strong> (clone, pip install, copy .env.example),
+          <strong>Features</strong> (list your 6+ test categories),
+          <strong>Demo</strong> (GIF or screenshot of framework running).</li>
+        <li><strong>Task 3:</strong> Push to GitHub with all the pieces: source, tests, CI/CD,
+          documentation, secrets management. Share the link. You've earned it. This is a
+          professional-grade project you can reference in interviews and job applications.</li>
+      </ul>
+      <div class="hint-box">
+        <strong>Hint:</strong> Check <code>https://github.com/kennethreitz/requests</code>
+        or <code>https://github.com/psf/requests</code> for examples of well-structured
+        open-source Python projects. Your framework should follow similar conventions:
+        <code>src/</code> for source, <code>tests/</code> for tests, <code>setup.py</code>,
+        <code>README.md</code>, <code>LICENSE</code>, <code>.github/workflows/</code> for CI.
+      </div>
+    </div>
   </div>
 
-</div>
+  <!-- Graduation -->
+  <div class="section-card" style="background: linear-gradient(135deg,#f85149,#a371f7); border-color:#f85149;">
+    <div class="section-card-body" style="padding:24px; text-align:center;">
+      <div style="font-size:48px; margin-bottom:16px;">🚀</div>
+      <div style="font-size:20px; font-weight:700; color:#ffffff; margin-bottom:12px;">
+        You Are Now a WLAN Automation Engineer
+      </div>
+      <div style="font-size:14px; color:#ffffff; opacity:0.95; line-height:1.8;">
+        You've completed a comprehensive 40-day curriculum covering automation fundamentals,
+        network programming, enterprise testing frameworks, and CI/CD integration.
+        <br/><br/>
+        Your skills are in acute shortage. Companies need engineers like you.
+        <br/><br/>
+        Go build something amazing.
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .day-content -->
